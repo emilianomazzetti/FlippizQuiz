@@ -1,0 +1,494 @@
+import React, { useState, useEffect } from 'react';
+import {
+  RoomState,
+  Player,
+  Question,
+  AnswerSubmission,
+  DrawingSubmission
+} from '../types/quiz';
+import { QuestionRenderer } from './game/QuestionRenderer';
+import { QuestionCreator } from './QuestionCreator';
+import { sound } from '../utils/audio';
+import confetti from 'canvas-confetti';
+import {
+  Trophy,
+  Flame,
+  Clock,
+  Sparkles,
+  CheckCircle,
+  XCircle,
+  PlusCircle,
+  Send,
+  Zap,
+  Star,
+  Award
+} from 'lucide-react';
+
+interface StudentDeviceProps {
+  roomState: RoomState;
+  myPlayer: Player | null;
+  initialPin?: string;
+  wasKicked?: boolean;
+  onJoinRoom: (name: string, avatar: string, pin: string) => void;
+  onSubmitQuestion: (question: Question) => void;
+  onSubmitAnswer: (isCorrect: boolean, payload?: any) => void;
+  onSaveDrawing: (dataUrl: string) => void;
+  onVoteDrawing: (targetPlayerId: string) => void;
+  onStartQuiz?: () => void;
+}
+
+const AVATARS = ['🚀', '🦊', '⚡', '🦁', '🐼', '🎨', '🌟', '🎯', '🦉', '🐬', '🏆', '🍕'];
+
+export const StudentDevice: React.FC<StudentDeviceProps> = ({
+  roomState,
+  myPlayer,
+  initialPin,
+  wasKicked = false,
+  onJoinRoom,
+  onSubmitQuestion,
+  onSubmitAnswer,
+  onSaveDrawing,
+  onVoteDrawing,
+  onStartQuiz
+}) => {
+  // Join form state
+  const [name, setName] = useState('');
+  const [selectedAvatar, setSelectedAvatar] = useState(AVATARS[0]);
+  const [pin, setPin] = useState(initialPin || roomState.roomCode);
+  const [activeTab, setActiveTab] = useState<'play' | 'create'>('create');
+  const [hasCreatedQuestion, setHasCreatedQuestion] = useState(false);
+  const [timeRemaining, setTimeRemaining] = useState<number>(25);
+
+  useEffect(() => {
+    if (initialPin) setPin(initialPin);
+  }, [initialPin]);
+
+  // Active player resolution: live score from roomState or local player
+  const activePlayer =
+    myPlayer && roomState.players && roomState.players[myPlayer.id]
+      ? roomState.players[myPlayer.id]
+      : myPlayer;
+
+  const questionsList = roomState.questions || [];
+  const currentQ = questionsList[roomState.currentQuestionIndex] || questionsList[0];
+  const rawAnswer =
+    activePlayer && roomState.answersThisTurn
+      ? roomState.answersThisTurn[activePlayer.id]
+      : null;
+  // Answer must belong to the current turn/question
+  const myAnswer =
+    rawAnswer &&
+    (!roomState.turnStartTime || rawAnswer.submittedAt >= roomState.turnStartTime - 2000)
+      ? rawAnswer
+      : null;
+  const isMyOwnQuestion =
+    currentQ && activePlayer && currentQ.creatorName === activePlayer.name;
+
+  // Countdown timer when question is active (silent on student device)
+  useEffect(() => {
+    if (roomState.phase !== 'question_active' || !currentQ) return;
+
+    setTimeRemaining(currentQ.timeLimit);
+    const interval = setInterval(() => {
+      setTimeRemaining((prev) => {
+        if (prev <= 1) {
+          clearInterval(interval);
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, [roomState.phase, roomState.currentQuestionIndex, currentQ]);
+
+  // Audio & confetti on result
+  useEffect(() => {
+    if (roomState.phase === 'question_results' && myAnswer) {
+      if (myAnswer.isCorrect) {
+        sound.playCorrect();
+        confetti({
+          particleCount: 50,
+          spread: 70,
+          origin: { y: 0.8 }
+        });
+      } else {
+        sound.playWrong();
+      }
+    }
+  }, [roomState.phase, myAnswer]);
+
+  const handleJoin = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!name.trim()) return;
+    onJoinRoom(name.trim(), selectedAvatar, pin.trim());
+  };
+
+  const handleCreatedQuestion = (q: Question) => {
+    onSubmitQuestion(q);
+    setHasCreatedQuestion(true);
+    setActiveTab('play');
+  };
+
+  // 1. NOT LOGGED IN: Join Screen
+  if (!activePlayer) {
+    return (
+      <div className="w-full max-w-md mx-auto p-6 bg-slate-900 border border-slate-800 rounded-3xl shadow-2xl space-y-6 text-slate-100 animate-fade-in my-6">
+        <div className="text-center space-y-2">
+          <div className="w-16 h-16 mx-auto rounded-3xl bg-gradient-to-tr from-indigo-500 to-purple-600 flex items-center justify-center text-3xl shadow-lg shadow-indigo-500/30">
+            ⚡
+          </div>
+          <h2 className="text-2xl font-black text-white">Entra in FlipQuiz</h2>
+          <p className="text-xs text-slate-400">
+            Partecipa alla sessione della tua classe dal tuo smartphone o tablet
+          </p>
+        </div>
+
+        {wasKicked && (
+          <div className="p-3 bg-amber-500/20 border border-amber-500/40 rounded-2xl text-amber-300 text-xs text-center font-bold animate-fade-in">
+            Sei stato rimosso dalla sessione o il database è stato azzerato. Inserisci il tuo nome per accedere nuovamente.
+          </div>
+        )}
+
+        <form onSubmit={handleJoin} className="space-y-5">
+          <div>
+            <label className="text-xs font-bold text-slate-400 block mb-1">
+              Codice Stanza (PIN LIM):
+            </label>
+            <input
+              type="text"
+              required
+              value={pin}
+              onChange={(e) => setPin(e.target.value.toUpperCase())}
+              placeholder="FLIP-XXX"
+              className="w-full bg-slate-800 border border-slate-700 rounded-2xl px-4 py-3 text-lg font-black tracking-widest text-center text-amber-300 uppercase focus:outline-none focus:ring-2 focus:ring-indigo-500 font-mono"
+            />
+          </div>
+
+          <div>
+            <label className="text-xs font-bold text-slate-400 block mb-1">
+              Il tuo Nome da Banco:
+            </label>
+            <input
+              type="text"
+              required
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="Es. Leonardo, Sofia, Matteo..."
+              className="w-full bg-slate-800 border border-slate-700 rounded-2xl px-4 py-3 text-base font-bold text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              autoFocus
+            />
+          </div>
+
+          <div>
+            <label className="text-xs font-bold text-slate-400 block mb-2">
+              Scegli il tuo Avatar:
+            </label>
+            <div className="grid grid-cols-6 gap-2">
+              {AVATARS.map((av) => (
+                <button
+                  key={av}
+                  type="button"
+                  onClick={() => setSelectedAvatar(av)}
+                  className={`w-11 h-11 rounded-xl text-xl flex items-center justify-center transition-all ${
+                    selectedAvatar === av
+                      ? 'bg-indigo-600 ring-2 ring-white scale-110 shadow-md'
+                      : 'bg-slate-800 hover:bg-slate-750'
+                  }`}
+                >
+                  {av}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <button
+            type="submit"
+            className="w-full py-4 rounded-2xl bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-400 hover:to-teal-500 text-white font-black text-base shadow-xl flex items-center justify-center gap-2 transition-transform active:scale-98 cursor-pointer"
+          >
+            Partecipa alla Sfida!
+          </button>
+
+          <button
+            type="button"
+            onClick={() => {
+              const testNames = ['Matteo B.', 'Sofia L.', 'Lorenzo T.', 'Chiara M.', 'Alessandro G.'];
+              const randomName = testNames[Math.floor(Math.random() * testNames.length)];
+              onJoinRoom(randomName, selectedAvatar, pin.trim() || 'FLIP-101');
+            }}
+            className="w-full py-2.5 px-4 bg-slate-800 hover:bg-slate-750 text-indigo-300 border border-slate-700 hover:border-indigo-500/40 font-bold text-xs rounded-xl flex items-center justify-center gap-2 transition-all cursor-pointer"
+          >
+            <Zap className="w-3.5 h-3.5 text-amber-400" />
+            Entra rapido come studente di prova (1-Click)
+          </button>
+        </form>
+      </div>
+    );
+  }
+
+  // 2. LOGGED IN: Student App
+  return (
+    <div className="w-full max-w-2xl mx-auto flex flex-col gap-6 text-slate-100">
+      {/* Student Profile Bar */}
+      <div className="flex items-center justify-between p-4 bg-slate-900 border border-slate-800 rounded-2xl shadow-xl">
+        <div className="flex items-center gap-3">
+          <div className="w-11 h-11 rounded-2xl bg-slate-800 border border-slate-700 flex items-center justify-center text-2xl shadow-inner">
+            {activePlayer.avatar}
+          </div>
+          <div>
+            <h3 className="font-extrabold text-base text-white">{activePlayer.name}</h3>
+            <span className="text-[11px] text-indigo-400 font-semibold">Studente Connesso</span>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-3">
+          {activePlayer.streak > 1 && (
+            <div className="flex items-center gap-1 px-2.5 py-1 bg-amber-500/20 border border-amber-500/40 rounded-xl text-xs font-black text-amber-300">
+              <Flame className="w-3.5 h-3.5 fill-amber-400" />
+              {activePlayer.streak}x
+            </div>
+          )}
+          <div className="text-right">
+            <span className="text-lg font-black text-emerald-400 font-mono">{activePlayer.score}</span>
+            <span className="text-xs text-slate-400 ml-1">pt</span>
+          </div>
+        </div>
+      </div>
+
+      {/* Tabs during lobby: Play vs Create */}
+      {roomState.phase === 'lobby' && (
+        <div className="flex bg-slate-900 p-1.5 rounded-2xl border border-slate-800 gap-2">
+          <button
+            onClick={() => setActiveTab('create')}
+            className={`flex-1 py-2.5 rounded-xl text-xs font-black flex items-center justify-center gap-2 transition-all ${
+              activeTab === 'create'
+                ? 'bg-indigo-600 text-white shadow-md'
+                : 'text-slate-400 hover:text-white'
+            }`}
+          >
+            <PlusCircle className="w-4 h-4" />
+            Crea una Domanda
+          </button>
+          <button
+            onClick={() => setActiveTab('play')}
+            className={`flex-1 py-2.5 rounded-xl text-xs font-black flex items-center justify-center gap-2 transition-all ${
+              activeTab === 'play'
+                ? 'bg-indigo-600 text-white shadow-md'
+                : 'text-slate-400 hover:text-white'
+            }`}
+          >
+            <Clock className="w-4 h-4" />
+            Stato Attesa Quiz
+          </button>
+        </div>
+      )}
+
+      {/* TAB: CREATE QUESTION */}
+      {roomState.phase === 'lobby' && activeTab === 'create' && (
+        <QuestionCreator
+          creatorName={activePlayer.name}
+          onSubmitQuestion={handleCreatedQuestion}
+        />
+      )}
+
+      {/* TAB: WAITING IN LOBBY */}
+      {roomState.phase === 'lobby' && activeTab === 'play' && (
+        <div className="bg-slate-900 border border-slate-800 p-8 rounded-3xl text-center space-y-6 shadow-2xl">
+          <div className="w-20 h-20 mx-auto rounded-3xl bg-indigo-500/20 text-indigo-400 flex items-center justify-center text-4xl animate-bounce">
+            ⏳
+          </div>
+
+          <div className="space-y-2">
+            <h3 className="text-2xl font-black text-white">In Attesa del Docente</h3>
+            <p className="text-xs text-slate-400 max-w-sm mx-auto">
+              Guarda lo schermo della LIM: quando tutti gli studenti avranno inserito le loro
+              domande, il docente avvierà la sfida live!
+            </p>
+          </div>
+
+          {hasCreatedQuestion && (
+            <div className="p-4 bg-emerald-500/10 border border-emerald-500/30 rounded-2xl text-xs text-emerald-300 font-bold flex items-center justify-center gap-2">
+              <CheckCircle className="w-4 h-4" />
+              La tua domanda è stata inserita con successo nel repository della classe!
+            </div>
+          )}
+
+          {onStartQuiz && (
+            <div className="pt-4 border-t border-slate-800">
+              <button
+                type="button"
+                onClick={onStartQuiz}
+                className="w-full py-3.5 px-4 rounded-2xl bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-400 hover:to-teal-500 font-black text-sm text-white shadow-lg flex items-center justify-center gap-2 transition-transform active:scale-95"
+              >
+                <Sparkles className="w-4 h-4" />
+                Avvia FlipQuiz Live Subito (Test Risposte)
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* QUESTION INTRO */}
+      {roomState.phase === 'question_intro' && currentQ && (
+        <div className="bg-slate-900 border-2 border-indigo-500 p-8 rounded-3xl text-center space-y-4 shadow-2xl animate-scale-up">
+          <span className="text-xs font-black uppercase tracking-widest text-indigo-400">
+            Prossima Domanda
+          </span>
+          <h2 className="text-3xl font-black text-amber-300">
+            {isMyOwnQuestion ? 'È LA TUA DOMANDA! 🌟' : `Creata da ${currentQ.creatorName}`}
+          </h2>
+          <p className="text-xs text-slate-300">
+            Tieniti pronto, il tempo inizierà a scorrere tra pochissimi secondi!
+          </p>
+        </div>
+      )}
+
+      {/* QUESTION ACTIVE */}
+      {roomState.phase === 'question_active' && currentQ && (
+        <div className="space-y-6">
+          {/* Header Bar with Countdown and Badge */}
+          <div className="flex items-center justify-between p-4 bg-slate-900 border border-slate-800 rounded-2xl">
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-slate-400">Autore:</span>
+              <span className="px-2.5 py-0.5 rounded-full bg-amber-400/20 text-amber-300 text-xs font-black">
+                {currentQ.creatorName}
+              </span>
+            </div>
+
+            {/* Circular Timer Pill */}
+            <div
+              className={`px-3 py-1 rounded-xl font-mono text-sm font-black flex items-center gap-1.5 transition-colors ${
+                timeRemaining <= 5
+                  ? 'bg-rose-500/20 text-rose-400 border border-rose-500/40 animate-pulse'
+                  : 'bg-indigo-500/20 text-indigo-300 border border-indigo-500/30'
+              }`}
+            >
+              <Clock className="w-4 h-4" />
+              {timeRemaining}s
+            </div>
+          </div>
+
+          {/* Interactive Player Switcher */}
+          <QuestionRenderer
+            question={currentQ}
+            onAnswer={onSubmitAnswer}
+            disabled={currentQ.type === 'draw_vote' || currentQ.type === 'word_builder' ? false : myAnswer !== null}
+            myPlayerId={activePlayer.id}
+            drawings={roomState.drawingsThisTurn || {}}
+            isGalleryMode={false}
+            onSaveDrawing={onSaveDrawing}
+            onVoteDrawing={onVoteDrawing}
+          />
+
+          {currentQ.type === 'draw_vote' ? (
+            roomState.drawingsThisTurn && roomState.drawingsThisTurn[activePlayer.id] ? (
+              <div className="p-4 bg-emerald-500/20 border-2 border-emerald-500/60 rounded-2xl text-center text-sm font-black text-emerald-300 flex items-center justify-center gap-2 shadow-xl">
+                <CheckCircle className="w-5 h-5 text-emerald-400 stroke-[3]" />
+                <span>Disegno inviato con successo! In attesa degli altri partecipanti...</span>
+              </div>
+            ) : (
+              <div className="text-center text-xs text-slate-400">
+                Disegna sul riquadro qui sopra. Il disegno viene salvato automaticamente! ⭐
+              </div>
+            )
+          ) : currentQ.type === 'word_builder' ? (
+            <div className="p-3 bg-slate-900 border border-slate-800 rounded-2xl text-center text-xs text-slate-300">
+              {myAnswer && myAnswer.answerPayload?.count > 0 ? (
+                <span className="text-emerald-300 font-bold">
+                  Parole trovate: {myAnswer.answerPayload.count} (+{myAnswer.pointsAwarded} pt)! Continua a formare altre parole prima dello scadere del tempo!
+                </span>
+              ) : (
+                'Componi quante più parole possibili (anche articoli, preposizioni, pronomi, verbi) prima dello scadere del tempo!'
+              )}
+            </div>
+          ) : myAnswer ? (
+            <div className="p-4 bg-emerald-500/20 border-2 border-emerald-500/60 rounded-2xl text-center text-sm font-black text-emerald-300 flex items-center justify-center gap-2 animate-bounce shadow-xl">
+              <CheckCircle className="w-5 h-5 text-emerald-400 stroke-[3]" />
+              <span>Risposta registrata con successo!</span>
+              <span className="text-xs bg-emerald-500 text-slate-950 px-2.5 py-0.5 rounded-full font-black">
+                {myAnswer.isCorrect ? `+${myAnswer.pointsAwarded} pt` : 'Registrata'}
+              </span>
+            </div>
+          ) : (
+            <div className="text-center text-xs text-slate-400">
+              Tocca la risposta per registrarla sul monitor della classe.
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* QUESTION RESULTS */}
+      {roomState.phase === 'question_results' && (
+        <div className="bg-slate-900 border border-slate-800 p-8 rounded-3xl text-center space-y-6 shadow-2xl animate-fade-in">
+          {myAnswer ? (
+            <div className="space-y-4">
+              <div
+                className={`w-20 h-20 mx-auto rounded-full flex items-center justify-center text-4xl shadow-xl ${
+                  myAnswer.isCorrect
+                    ? 'bg-emerald-500/20 border-2 border-emerald-400 text-emerald-300'
+                    : 'bg-rose-500/20 border-2 border-rose-400 text-rose-300'
+                }`}
+              >
+                {myAnswer.isCorrect ? '🎉' : '❌'}
+              </div>
+
+              <h3 className="text-2xl font-black text-white">
+                {myAnswer.isCorrect ? 'Risposta Esatta!' : 'Peccato, risposta errata!'}
+              </h3>
+
+              <div className="flex items-center justify-center gap-3">
+                <span className="px-4 py-2 rounded-2xl bg-slate-800 text-base font-black text-amber-300">
+                  +{myAnswer.pointsAwarded} pt
+                </span>
+                {myAnswer.speedRank && (
+                  <span className="px-4 py-2 rounded-2xl bg-amber-500/20 border border-amber-400 text-xs font-black text-amber-300 flex items-center gap-1">
+                    <Zap className="w-4 h-4 fill-amber-400" />
+                    {myAnswer.speedRank}° Dito più Veloce!
+                  </span>
+                )}
+              </div>
+            </div>
+          ) : (
+            <div className="space-y-2">
+              <h3 className="text-xl font-bold text-slate-300">Tempo Scaduto</h3>
+              <p className="text-xs text-slate-500">Non hai inviato la risposta in tempo per questo turno.</p>
+            </div>
+          )}
+
+          <p className="text-xs text-slate-400 pt-2">
+            Guarda la LIM del docente per scoprire la classifica aggiornata!
+          </p>
+        </div>
+      )}
+
+      {/* DRAW GALLERY & PEER VOTING */}
+      {roomState.phase === 'draw_gallery' && currentQ && (
+        <QuestionRenderer
+          question={currentQ}
+          onAnswer={() => {}}
+          myPlayerId={activePlayer.id}
+          drawings={roomState.drawingsThisTurn || {}}
+          isGalleryMode={true}
+          onSaveDrawing={onSaveDrawing}
+          onVoteDrawing={onVoteDrawing}
+        />
+      )}
+
+      {/* LEADERBOARD & PODIUM */}
+      {(roomState.phase === 'leaderboard' || roomState.phase === 'podium') && (
+        <div className="bg-slate-900 border border-slate-800 p-8 rounded-3xl text-center space-y-4 shadow-2xl animate-fade-in">
+          <Trophy className="w-16 h-16 mx-auto text-amber-400 fill-amber-400" />
+          <h3 className="text-2xl font-black text-white">
+            {roomState.phase === 'podium' ? 'Fine Partita!' : 'Classifica Turno'}
+          </h3>
+          <p className="text-xs text-slate-400">
+            Il tuo punteggio attuale è <strong className="text-amber-300 font-bold">{activePlayer.score} punti</strong>.
+          </p>
+          <p className="text-xs text-slate-500">
+            Guarda la LIM per i dettagli del turno e i vincitori sul podio!
+          </p>
+        </div>
+      )}
+    </div>
+  );
+};

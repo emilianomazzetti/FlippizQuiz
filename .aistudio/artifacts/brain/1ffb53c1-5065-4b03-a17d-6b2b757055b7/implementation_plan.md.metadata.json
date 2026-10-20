@@ -1,0 +1,6 @@
+{
+  "summary": "Piano di implementazione per:\n- Nuova attività interattiva 'Becca la talpa' (Whack-a-Mole grammaticale)\n- Ridenominazione di 'Memory e Testo' in 'Associazione Semplice' con supporto a testo e/o immagine su entrambe le celle\n- Motore di ricerca immagini web ad alta definizione con Wikimedia Commons e libreria didattica arricchita\n- Aggiunta di immagini nelle opzioni di Risposta Multipla\n- Risoluzione definitiva dell'errore 'bank is not defined' nel Puzzle\n- Espulsione studente (Kick Out) dal monitor docente con riconnessione immediata",
+  "updatedAt": "2026-10-19T16:41:34.011157770Z",
+  "requestFeedback": true,
+  "userFacing": true
+}
