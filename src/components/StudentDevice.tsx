@@ -118,16 +118,24 @@ export const StudentDevice: React.FC<StudentDeviceProps> = ({
     }
   }, [roomState.phase, myAnswer]);
 
+  // Keep student in "create" tab whenever room is in lobby
+  useEffect(() => {
+    if (roomState.phase === 'lobby') {
+      setActiveTab('create');
+    }
+  }, [roomState.phase]);
+
   const handleJoin = (e: React.FormEvent) => {
     e.preventDefault();
     if (!name.trim()) return;
     onJoinRoom(name.trim(), selectedAvatar, pin.trim());
+    setActiveTab('create');
   };
 
   const handleCreatedQuestion = (q: Question) => {
     onSubmitQuestion(q);
     setHasCreatedQuestion(true);
-    setActiveTab('play');
+    setActiveTab('create');
   };
 
   // 1. NOT LOGGED IN: Join Screen
@@ -369,51 +377,77 @@ export const StudentDevice: React.FC<StudentDeviceProps> = ({
           </div>
 
           {/* Interactive Player Switcher */}
-          <QuestionRenderer
-            question={currentQ}
-            onAnswer={onSubmitAnswer}
-            disabled={currentQ.type === 'draw_vote' || currentQ.type === 'word_builder' ? false : myAnswer !== null}
-            myPlayerId={activePlayer.id}
-            drawings={roomState.drawingsThisTurn || {}}
-            isGalleryMode={false}
-            onSaveDrawing={onSaveDrawing}
-            onVoteDrawing={onVoteDrawing}
-          />
+          {(() => {
+            const isContinuousGame =
+              currentQ.type === 'draw_vote' ||
+              currentQ.type === 'word_builder' ||
+              currentQ.type === 'longest_word' ||
+              currentQ.type === 'mole_whack';
 
-          {currentQ.type === 'draw_vote' ? (
-            roomState.drawingsThisTurn && roomState.drawingsThisTurn[activePlayer.id] ? (
-              <div className="p-4 bg-emerald-500/20 border-2 border-emerald-500/60 rounded-2xl text-center text-sm font-black text-emerald-300 flex items-center justify-center gap-2 shadow-xl">
-                <CheckCircle className="w-5 h-5 text-emerald-400 stroke-[3]" />
-                <span>Disegno inviato con successo! In attesa degli altri partecipanti...</span>
-              </div>
-            ) : (
-              <div className="text-center text-xs text-slate-400">
-                Disegna sul riquadro qui sopra. Il disegno viene salvato automaticamente! ⭐
-              </div>
-            )
-          ) : currentQ.type === 'word_builder' ? (
-            <div className="p-3 bg-slate-900 border border-slate-800 rounded-2xl text-center text-xs text-slate-300">
-              {myAnswer && myAnswer.answerPayload?.count > 0 ? (
-                <span className="text-emerald-300 font-bold">
-                  Parole trovate: {myAnswer.answerPayload.count} (+{myAnswer.pointsAwarded} pt)! Continua a formare altre parole prima dello scadere del tempo!
-                </span>
-              ) : (
-                'Componi quante più parole possibili (anche articoli, preposizioni, pronomi, verbi) prima dello scadere del tempo!'
-              )}
-            </div>
-          ) : myAnswer ? (
-            <div className="p-4 bg-emerald-500/20 border-2 border-emerald-500/60 rounded-2xl text-center text-sm font-black text-emerald-300 flex items-center justify-center gap-2 animate-bounce shadow-xl">
-              <CheckCircle className="w-5 h-5 text-emerald-400 stroke-[3]" />
-              <span>Risposta registrata con successo!</span>
-              <span className="text-xs bg-emerald-500 text-slate-950 px-2.5 py-0.5 rounded-full font-black">
-                {myAnswer.isCorrect ? `+${myAnswer.pointsAwarded} pt` : 'Registrata'}
-              </span>
-            </div>
-          ) : (
-            <div className="text-center text-xs text-slate-400">
-              Tocca la risposta per registrarla sul monitor della classe.
-            </div>
-          )}
+            return (
+              <>
+                <QuestionRenderer
+                  question={currentQ}
+                  onAnswer={onSubmitAnswer}
+                  disabled={isContinuousGame ? timeRemaining <= 0 : myAnswer !== null}
+                  myPlayerId={activePlayer.id}
+                  drawings={roomState.drawingsThisTurn || {}}
+                  isGalleryMode={false}
+                  onSaveDrawing={onSaveDrawing}
+                  onVoteDrawing={onVoteDrawing}
+                />
+
+                {currentQ.type === 'draw_vote' ? (
+                  roomState.drawingsThisTurn && roomState.drawingsThisTurn[activePlayer.id] ? (
+                    <div className="p-4 bg-emerald-500/20 border-2 border-emerald-500/60 rounded-2xl text-center text-sm font-black text-emerald-300 flex items-center justify-center gap-2 shadow-xl">
+                      <CheckCircle className="w-5 h-5 text-emerald-400 stroke-[3]" />
+                      <span>Disegno inviato con successo! Attendi la fase di voto con le stelle ⭐</span>
+                    </div>
+                  ) : (
+                    <div className="text-center text-xs text-slate-400">
+                      Disegna sul riquadro qui sopra e tocca Conferma Disegno per inviarlo! ⭐
+                    </div>
+                  )
+                ) : currentQ.type === 'word_builder' ? (
+                  <div className="p-3 bg-slate-900 border border-slate-800 rounded-2xl text-center text-xs text-slate-300">
+                    {myAnswer && myAnswer.answerPayload?.totalLetters > 0 ? (
+                      <span className="text-emerald-300 font-bold">
+                        Lettere totali accumulate: {myAnswer.answerPayload.totalLetters} (+{myAnswer.pointsAwarded} pt)! Continua a formare altre parole prima dello scadere del tempo!
+                      </span>
+                    ) : (
+                      'Componi quante più parole possibili (1 lettera = 1 punto) prima dello scadere del tempo!'
+                    )}
+                  </div>
+                ) : currentQ.type === 'longest_word' ? (
+                  <div className="p-3 bg-slate-900 border border-slate-800 rounded-2xl text-center text-xs text-slate-300">
+                    {myAnswer && myAnswer.answerPayload?.word ? (
+                      <span className="text-fuchsia-300 font-bold">
+                        Parola più lunga registrata: "{myAnswer.answerPayload.word}" ({myAnswer.answerPayload.length} lettere • {myAnswer.pointsAwarded} pt)! Continua a cercare parole più lunghe!
+                      </span>
+                    ) : (
+                      'Crea la parola più lunga possibile con le 14 lettere prima dello scadere del tempo! (+25 punti bonus al vincitore)'
+                    )}
+                  </div>
+                ) : currentQ.type === 'mole_whack' ? (
+                  <div className="p-3 bg-slate-900 border border-slate-800 rounded-2xl text-center text-xs text-slate-300">
+                    Becca le talpe con la categoria indicata in alto fino allo scadere del tempo!
+                  </div>
+                ) : myAnswer ? (
+                  <div className="p-4 bg-emerald-500/20 border-2 border-emerald-500/60 rounded-2xl text-center text-sm font-black text-emerald-300 flex items-center justify-center gap-2 animate-bounce shadow-xl">
+                    <CheckCircle className="w-5 h-5 text-emerald-400 stroke-[3]" />
+                    <span>Risposta registrata con successo!</span>
+                    <span className="text-xs bg-emerald-500 text-slate-950 px-2.5 py-0.5 rounded-full font-black">
+                      {myAnswer.isCorrect ? `+${myAnswer.pointsAwarded} pt` : 'Registrata'}
+                    </span>
+                  </div>
+                ) : (
+                  <div className="text-center text-xs text-slate-400">
+                    Tocca la risposta per registrarla sul monitor della classe.
+                  </div>
+                )}
+              </>
+            );
+          })()}
         </div>
       )}
 

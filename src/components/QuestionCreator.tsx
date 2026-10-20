@@ -17,7 +17,8 @@ import {
   PuzzleContent,
   WordSearchContent,
   MathChallengeContent,
-  WordBuilderContent
+  WordBuilderContent,
+  LongestWordContent
 } from '../types/quiz';
 import { ImagePickerModal } from './ImagePickerModal';
 import { generateMathProblems } from '../utils/mathGenerator';
@@ -35,7 +36,8 @@ import {
   Grid,
   Palette,
   Calculator,
-  Shuffle
+  Shuffle,
+  Award
 } from 'lucide-react';
 
 interface QuestionCreatorProps {
@@ -145,9 +147,16 @@ const QUESTION_TYPES_INFO: {
   {
     type: 'word_builder',
     label: 'Più Parole',
-    description: '5 consonanti + 2 vocali: forma più parole possibili',
+    description: '5 consonanti + 2 vocali: forma più parole possibili (1 lettera 1 pt)',
     icon: Type,
     color: 'from-lime-500 to-emerald-600'
+  },
+  {
+    type: 'longest_word',
+    label: 'La Parola Più Lunga',
+    description: '10 consonanti + 4 vocali: trova la parola più lunga (+25 Bonus)',
+    icon: Award,
+    color: 'from-fuchsia-500 to-pink-600'
   }
 ];
 
@@ -257,9 +266,26 @@ export const QuestionCreator: React.FC<QuestionCreatorProps> = ({
   const [mathRange, setMathRange] = useState<10 | 100 | 1000>(100);
   const [mathCarry, setMathCarry] = useState(false);
 
-  // Word Builder
+  // Word Builder (Più Parole)
   const [builderConsonants, setBuilderConsonants] = useState<string[]>(['R', 'S', 'T', 'M', 'P']);
   const [builderVowels, setBuilderVowels] = useState<string[]>(['A', 'E']);
+
+  // La Parola Più Lunga (10 consonanti + 4 vocali)
+  const [longestConsonants, setLongestConsonants] = useState<string[]>([
+    'C', 'R', 'T', 'N', 'L', 'S', 'P', 'M', 'D', 'G'
+  ]);
+  const [longestVowels, setLongestVowels] = useState<string[]>([
+    'A', 'E', 'I', 'O'
+  ]);
+
+  const randomizeLongestLetters = () => {
+    const C_POOL = ['B', 'C', 'D', 'F', 'G', 'L', 'M', 'N', 'P', 'Q', 'R', 'S', 'T', 'V', 'Z'];
+    const V_POOL = ['A', 'E', 'I', 'O', 'U'];
+    const shuffledC = [...C_POOL].sort(() => 0.5 - Math.random());
+    const shuffledV = [...V_POOL].sort(() => 0.5 - Math.random());
+    setLongestConsonants(shuffledC.slice(0, 10));
+    setLongestVowels(shuffledV.slice(0, 4));
+  };
 
   const openImagePicker = (target: string) => {
     setActiveImagePickerTarget(target);
@@ -378,6 +404,11 @@ export const QuestionCreator: React.FC<QuestionCreatorProps> = ({
         consonants: builderConsonants,
         vowels: builderVowels
       } as WordBuilderContent;
+    } else if (selectedType === 'longest_word') {
+      content = {
+        consonants: longestConsonants,
+        vowels: longestVowels
+      } as LongestWordContent;
     }
 
     const newQuestion: Question = {
@@ -1362,6 +1393,78 @@ export const QuestionCreator: React.FC<QuestionCreatorProps> = ({
                     className="w-10 h-10 text-center font-black text-lg bg-slate-900 border border-amber-500/50 rounded-lg text-amber-300 uppercase"
                   />
                 ))}
+              </div>
+            </div>
+          )}
+
+          {/* Type 14: La Parola Più Lunga */}
+          {selectedType === 'longest_word' && (
+            <div className="space-y-4 p-5 bg-slate-900 rounded-2xl border border-fuchsia-500/40">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h4 className="text-sm font-black text-white flex items-center gap-2">
+                    <Award className="w-4 h-4 text-fuchsia-400" />
+                    Configura le 10 consonanti e 4 vocali
+                  </h4>
+                  <p className="text-xs text-slate-400 mt-0.5">
+                    Gli studenti useranno queste 14 lettere per comporre la parola valida più lunga possibile. Chi trova la più lunga vince +25 punti extra!
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={randomizeLongestLetters}
+                  className="px-3 py-1.5 rounded-xl bg-fuchsia-500/20 hover:bg-fuchsia-500/30 text-fuchsia-300 border border-fuchsia-500/40 text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer"
+                  title="Estrai casualmente lettere bilanciate"
+                >
+                  <Shuffle className="w-3.5 h-3.5" />
+                  Estrai Casuali
+                </button>
+              </div>
+
+              {/* 10 Consonants Inputs */}
+              <div>
+                <span className="text-xs font-bold text-slate-300 block mb-1.5">
+                  10 Consonanti (modifica le singole lettere se desideri):
+                </span>
+                <div className="flex flex-wrap gap-2">
+                  {longestConsonants.map((c, i) => (
+                    <input
+                      key={`lc-${i}`}
+                      type="text"
+                      maxLength={1}
+                      value={c}
+                      onChange={(e) => {
+                        const next = [...longestConsonants];
+                        next[i] = e.target.value.toUpperCase();
+                        setLongestConsonants(next);
+                      }}
+                      className="w-10 h-10 text-center font-black text-lg bg-slate-950 border border-indigo-500/50 rounded-xl text-white uppercase focus:ring-2 focus:ring-indigo-500 focus:outline-none"
+                    />
+                  ))}
+                </div>
+              </div>
+
+              {/* 4 Vowels Inputs */}
+              <div>
+                <span className="text-xs font-bold text-amber-400 block mb-1.5">
+                  4 Vocali (modifica le singole lettere se desideri):
+                </span>
+                <div className="flex flex-wrap gap-2">
+                  {longestVowels.map((v, i) => (
+                    <input
+                      key={`lv-${i}`}
+                      type="text"
+                      maxLength={1}
+                      value={v}
+                      onChange={(e) => {
+                        const next = [...longestVowels];
+                        next[i] = e.target.value.toUpperCase();
+                        setLongestVowels(next);
+                      }}
+                      className="w-10 h-10 text-center font-black text-lg bg-slate-950 border border-amber-500/60 rounded-xl text-amber-300 uppercase focus:ring-2 focus:ring-amber-500 focus:outline-none"
+                    />
+                  ))}
+                </div>
               </div>
             </div>
           )}

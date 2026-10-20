@@ -130,7 +130,9 @@ export const TeacherMonitor: React.FC<TeacherMonitorProps> = ({
       roomState.phase === 'question_active' &&
       playersList.length > 0 &&
       currentQ?.type !== 'draw_vote' &&
-      currentQ?.type !== 'word_builder'
+      currentQ?.type !== 'word_builder' &&
+      currentQ?.type !== 'longest_word' &&
+      currentQ?.type !== 'mole_whack'
     ) {
       const allConnectedHaveAnswered =
         playersList.length > 0 &&
@@ -148,8 +150,95 @@ export const TeacherMonitor: React.FC<TeacherMonitorProps> = ({
     }
   }, [answersList.length, playersList.length, roomState.phase, roomState.turnStartTime, currentQ?.type]);
 
+  // Auto advance to leaderboard when all connected students have voted in draw_gallery
+  useEffect(() => {
+    if (roomState.phase === 'draw_gallery' && playersList.length > 0) {
+      const totalStars = drawingsList.reduce((acc, d) => acc + (d.votes?.length || 0), 0);
+      if (totalStars >= playersList.length && drawingsList.length > 0) {
+        const timer = setTimeout(() => {
+          onNextQuestion();
+        }, 2200);
+        return () => clearTimeout(timer);
+      }
+    }
+  }, [roomState.phase, drawingsList, playersList.length, onNextQuestion]);
+
   const renderCorrectAnswerSummary = () => {
     if (!currentQ) return null;
+
+    if (currentQ.type === 'fill_blanks') {
+      const c = currentQ.content as any;
+      const originalText = c.originalText || '';
+      const rawTokens = originalText.split(' ');
+      const blanksList = c.blanks && c.blanks.length > 0
+        ? c.blanks
+        : [{ id: 'b-0', correctWord: c.blankWord || '' }];
+      const availableBlanks = [...blanksList];
+
+      return (
+        <div className="p-6 bg-emerald-500/15 border-2 border-emerald-500/50 rounded-3xl text-center space-y-3">
+          <span className="text-xs font-black text-emerald-400 uppercase tracking-widest block">
+            ✓ Frase Completa con le Parole Corrette al Posto Giusto:
+          </span>
+          <div className="flex flex-wrap items-center justify-center gap-2 text-xl md:text-2xl font-bold text-white leading-relaxed">
+            {rawTokens.map((token: string, idx: number) => {
+              const cleanToken = token.replace(/[^a-zA-Z0-9àèéìòùÀÈÉÌÒÙ]/g, '').toUpperCase();
+              const matchedIdx = availableBlanks.findIndex(
+                (b: any) => b && b.correctWord?.trim().toUpperCase() === cleanToken
+              );
+              if (matchedIdx !== -1) {
+                const b = availableBlanks[matchedIdx];
+                availableBlanks[matchedIdx] = null;
+                const trailing = token.match(/[^a-zA-Z0-9àèéìòùÀÈÉÌÒÙ]+$/)?.[0] || '';
+                return (
+                  <span key={idx} className="inline-flex items-center">
+                    <span className="px-3.5 py-1 bg-emerald-500 text-slate-950 font-black rounded-xl border border-emerald-300 shadow-md">
+                      {b.correctWord}
+                    </span>
+                    {trailing && <span className="ml-0.5">{trailing}</span>}
+                  </span>
+                );
+              }
+              return <span key={idx}>{token}</span>;
+            })}
+          </div>
+        </div>
+      );
+    }
+
+    if (currentQ.type === 'longest_word') {
+      const validAnswers = answersList.filter(
+        (a) => a.isCorrect && (a.answerPayload?.word || a.answerPayload?.length)
+      );
+      const longestAns = [...validAnswers].sort(
+        (a, b) =>
+          (b.answerPayload?.length || b.answerPayload?.word?.length || 0) -
+          (a.answerPayload?.length || a.answerPayload?.word?.length || 0)
+      )[0];
+
+      return (
+        <div className="p-6 bg-fuchsia-500/15 border-2 border-fuchsia-500/50 rounded-3xl text-center space-y-3">
+          <span className="text-xs font-black text-fuchsia-400 uppercase tracking-widest block">
+            🏆 La Parola Più Lunga Trovata dalla Classe (+25 Bonus Vincitore)
+          </span>
+          {longestAns ? (
+            <div className="flex flex-col items-center gap-1.5">
+              <span className="text-3xl md:text-4xl font-black text-white font-mono">
+                "{longestAns.answerPayload.word}"
+              </span>
+              <span className="text-sm font-extrabold text-fuchsia-300">
+                {longestAns.answerPayload.length} lettere • Composta da <strong className="text-white underline">{longestAns.playerName}</strong> (+25 pt Bonus!)
+              </span>
+            </div>
+          ) : (
+            <span className="text-base font-bold text-slate-400">
+              Nessuna parola valida trovata in questo turno.
+            </span>
+          )}
+        </div>
+      );
+    }
+
     let text = '';
     if (currentQ.type === 'multiple_choice') {
       const corr = (currentQ.content as any).options?.find((o: any) => o.isCorrect);
@@ -158,9 +247,12 @@ export const TeacherMonitor: React.FC<TeacherMonitorProps> = ({
       text = (currentQ.content as any).isTrueCorrect ? 'Vero' : 'Falso';
     } else if (currentQ.type === 'open_short') {
       text = (currentQ.content as any).acceptedAnswers?.join(', ');
-    } else if (currentQ.type === 'fill_blanks') {
-      const c = currentQ.content as any;
-      text = c.blankWord || c.blanks?.map((b: any) => b.correctWord).join(', ');
+    } else if (currentQ.type === 'word_builder') {
+      const allWords = answersList.flatMap((a) => a.answerPayload?.words || []);
+      const uniqueWords = Array.from(new Set(allWords));
+      text = uniqueWords.length > 0
+        ? `Parole trovate dalla classe (${uniqueWords.length}): ${uniqueWords.join(', ')}`
+        : 'Crea quante più parole possibili (1 lettera = 1 punto)';
     } else if (currentQ.type === 'anagram') {
       text = (currentQ.content as any).phraseOrWord;
     } else if (currentQ.type === 'math_challenge') {
@@ -172,6 +264,7 @@ export const TeacherMonitor: React.FC<TeacherMonitorProps> = ({
     } else if (currentQ.type === 'cell_identify') {
       text = (currentQ.content as any).cells?.filter((c: any) => c.isMatch).map((c: any) => c.text).join(', ');
     }
+
     return text ? (
       <div className="p-4 bg-emerald-500/15 border border-emerald-500/40 rounded-2xl text-center space-y-1">
         <span className="text-xs font-bold text-emerald-400 uppercase tracking-wider block">Risposta Corretta</span>
@@ -598,42 +691,78 @@ export const TeacherMonitor: React.FC<TeacherMonitorProps> = ({
               </p>
             </div>
 
-            {drawingsList.length === 0 ? (
-              <div className="p-12 text-center text-slate-400 bg-slate-900 rounded-3xl border border-slate-800">
-                Nessun disegno registrato per questa sfida.
-              </div>
-            ) : (
-              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6">
-                {drawingsList.map((item) => {
-                  const starCount = item.votes?.length || 0;
-                  return (
-                    <div
-                      key={item.playerId}
-                      className="rounded-3xl overflow-hidden border-2 border-slate-700 bg-slate-850 shadow-2xl flex flex-col transition-all hover:border-amber-400"
-                    >
-                      <div className="aspect-video w-full bg-slate-950 flex items-center justify-center overflow-hidden">
-                        <img
-                          src={item.dataUrl}
-                          alt={`Disegno di ${item.playerName}`}
-                          className="w-full h-full object-contain"
-                        />
-                      </div>
-                      <div className="p-4 bg-slate-900 flex items-center justify-between border-t border-slate-800">
-                        <div>
-                          <h4 className="font-black text-white text-base">{item.playerName}</h4>
-                          <div className="flex items-center gap-1.5 mt-0.5">
-                            <Star className="w-4 h-4 fill-amber-400 text-amber-400" />
-                            <span className="text-xs font-black text-amber-300">
-                              {starCount} {starCount === 1 ? 'stella' : 'stelle'}
-                            </span>
-                          </div>
-                        </div>
-                      </div>
+            {(() => {
+              const maxStars = Math.max(...drawingsList.map((d) => d.votes?.length || 0), 0);
+              const totalVotes = drawingsList.reduce((acc, d) => acc + (d.votes?.length || 0), 0);
+              const allHaveVoted = playersList.length > 0 && totalVotes >= playersList.length;
+
+              return (
+                <>
+                  <div className="flex items-center justify-between px-4 py-2 bg-slate-900 border border-slate-800 rounded-xl text-xs font-bold">
+                    <span className="text-slate-400">
+                      Voti espressi dalla classe: <strong className="text-amber-400 font-mono text-sm">{totalVotes}</strong> su {playersList.length}
+                    </span>
+                    {allHaveVoted ? (
+                      <span className="text-emerald-400 font-black flex items-center gap-1.5 animate-pulse">
+                        <CheckCircle className="w-4 h-4" /> Tutti hanno votato! Passaggio alla classifica...
+                      </span>
+                    ) : (
+                      <span className="text-slate-400">In attesa dei voti...</span>
+                    )}
+                  </div>
+
+                  {drawingsList.length === 0 ? (
+                    <div className="p-12 text-center text-slate-400 bg-slate-900 rounded-3xl border border-slate-800">
+                      Nessun disegno registrato per questa sfida.
                     </div>
-                  );
-                })}
-              </div>
-            )}
+                  ) : (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6">
+                      {drawingsList.map((item) => {
+                        const starCount = item.votes?.length || 0;
+                        const isLeading = maxStars > 0 && starCount === maxStars;
+
+                        return (
+                          <div
+                            key={item.playerId}
+                            className={`rounded-3xl overflow-hidden border-2 bg-slate-850 shadow-2xl flex flex-col transition-all relative ${
+                              isLeading
+                                ? 'border-amber-400 ring-4 ring-amber-400/30 shadow-amber-500/20'
+                                : 'border-slate-700 hover:border-slate-500'
+                            }`}
+                          >
+                            {isLeading && (
+                              <div className="absolute top-3 right-3 z-10 px-3 py-1 bg-amber-400 text-slate-950 font-black text-xs rounded-full shadow-lg flex items-center gap-1">
+                                <Trophy className="w-3.5 h-3.5" />
+                                1° Posto (+{starCount * 25} pt)
+                              </div>
+                            )}
+
+                            <div className="aspect-video w-full bg-slate-950 flex items-center justify-center overflow-hidden">
+                              <img
+                                src={item.dataUrl}
+                                alt={`Disegno di ${item.playerName}`}
+                                className="w-full h-full object-contain"
+                              />
+                            </div>
+                            <div className="p-4 bg-slate-900 flex items-center justify-between border-t border-slate-800">
+                              <div>
+                                <h4 className="font-black text-white text-base">{item.playerName}</h4>
+                                <div className="flex items-center gap-1.5 mt-0.5">
+                                  <Star className="w-4 h-4 fill-amber-400 text-amber-400" />
+                                  <span className="text-xs font-black text-amber-300">
+                                    {starCount} {starCount === 1 ? 'stella' : 'stelle'} (+{starCount * 25} pt)
+                                  </span>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </>
+              );
+            })()}
 
             <div className="flex justify-center mt-4">
               <button
@@ -668,40 +797,85 @@ export const TeacherMonitor: React.FC<TeacherMonitorProps> = ({
                 <h4 className="text-sm font-bold text-slate-400 uppercase tracking-wider mb-3 text-left">
                   Risposte di tutti i partecipanti ({answersList.length} su {playersList.length}):
                 </h4>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 max-h-60 overflow-y-auto pr-1">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 max-h-72 overflow-y-auto pr-1">
                   {playersList.map((player) => {
                     const sub = roomState.answersThisTurn[player.id];
+                    const isSuccess = !!(sub && sub.isCorrect);
+
+                    // Determine detailed answer text for what the student answered
+                    let answerDetail = '';
+                    if (!sub) {
+                      answerDetail = 'Nessuna risposta data (Tempo scaduto)';
+                    } else if (currentQ.type === 'fill_blanks') {
+                      const userAnswers =
+                        sub.answerPayload?.userAnswers ||
+                        (sub.answerPayload?.selectedWords
+                          ? Object.values(sub.answerPayload.selectedWords)
+                          : null);
+                      answerDetail =
+                        userAnswers && userAnswers.length > 0
+                          ? `Parole scelte: [${userAnswers.join(', ')}]`
+                          : sub.answerPayload?.summary || (sub.isCorrect ? 'Completato' : 'Errato');
+                    } else if (currentQ.type === 'longest_word') {
+                      answerDetail = sub.answerPayload?.word
+                        ? `Parola: "${sub.answerPayload.word}" (${sub.answerPayload.length} lettere)`
+                        : 'Nessuna parola valida trovata';
+                    } else if (currentQ.type === 'word_builder') {
+                      const words = sub.answerPayload?.words || [];
+                      const totalLetters = sub.answerPayload?.totalLetters || 0;
+                      answerDetail =
+                        words.length > 0
+                          ? `Parole (${words.length}): [${words.join(', ')}] • ${totalLetters} lettere`
+                          : 'Nessuna parola composta';
+                    } else if (currentQ.type === 'mole_whack') {
+                      answerDetail = `Talpe colpite: ${sub.answerPayload?.correctCount ?? 0} prese, ${sub.answerPayload?.errorCount ?? 0} errori`;
+                    } else if (currentQ.type === 'multiple_choice') {
+                      answerDetail = sub.answerPayload?.text ? `Opzione: "${sub.answerPayload.text}"` : (sub.isCorrect ? 'Opzione corretta' : 'Opzione errata');
+                    } else if (currentQ.type === 'true_false') {
+                      answerDetail = sub.answerPayload?.value !== undefined ? `Scelto: ${sub.answerPayload.value ? 'VERO' : 'FALSO'}` : (sub.isCorrect ? 'Corretta' : 'Errata');
+                    } else if (currentQ.type === 'open_short') {
+                      answerDetail = sub.answerPayload?.text ? `Risposta: "${sub.answerPayload.text}"` : (sub.isCorrect ? 'Corretta' : 'Errata');
+                    } else if (sub.answerPayload?.summary) {
+                      answerDetail = sub.answerPayload.summary;
+                    } else {
+                      answerDetail = sub.isCorrect ? 'Risposta corretta' : 'Risposta errata';
+                    }
+
                     return (
                       <div
                         key={player.id}
-                        className={`p-3.5 rounded-2xl border flex items-center justify-between ${
-                          sub
-                            ? sub.isCorrect
-                              ? 'bg-emerald-500/10 border-emerald-500/40 text-emerald-200'
-                              : 'bg-rose-500/10 border-rose-500/40 text-rose-200'
-                            : 'bg-slate-950 border-slate-800 text-slate-500'
+                        className={`p-3.5 rounded-2xl border flex flex-col gap-1.5 transition-all shadow-sm ${
+                          isSuccess
+                            ? 'bg-emerald-500/15 border-emerald-500/50 text-emerald-200'
+                            : 'bg-rose-500/15 border-rose-500/50 text-rose-200'
                         }`}
                       >
-                        <div className="flex items-center gap-2.5">
-                          <span className="text-base">{player.avatar}</span>
-                          <span className="font-bold text-sm text-white">{player.name}</span>
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2">
+                            <span className="text-base">{player.avatar}</span>
+                            <span className="font-extrabold text-sm text-white">{player.name}</span>
+                            {player.isSimulated && (
+                              <span className="text-[10px] text-slate-400 font-mono">(Bot)</span>
+                            )}
+                          </div>
+
+                          <div className="flex items-center gap-1.5">
+                            {isSuccess ? (
+                              <span className="text-xs font-black px-2.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 flex items-center gap-1">
+                                <CheckCircle className="w-3.5 h-3.5" />
+                                Corretta ({sub.timeSpent?.toFixed(1) || '0'}s)
+                              </span>
+                            ) : (
+                              <span className="text-xs font-black px-2.5 py-0.5 rounded-full bg-rose-500/20 text-rose-300 border border-rose-500/40 flex items-center gap-1">
+                                <XCircle className="w-3.5 h-3.5" />
+                                {sub ? `Errata (${sub.timeSpent?.toFixed(1) || '0'}s)` : 'Non ha risposto'}
+                              </span>
+                            )}
+                          </div>
                         </div>
 
-                        <div className="flex items-center gap-2">
-                          {sub ? (
-                            <>
-                              <span className="text-xs font-semibold">
-                                {sub.isCorrect ? 'Corretta' : 'Errata'} ({sub.timeSpent?.toFixed(1) || '0'}s)
-                              </span>
-                              {sub.isCorrect ? (
-                                <CheckCircle className="w-4 h-4 text-emerald-400" />
-                              ) : (
-                                <XCircle className="w-4 h-4 text-rose-400" />
-                              )}
-                            </>
-                          ) : (
-                            <span className="text-xs italic text-slate-500">Non ha risposto</span>
-                          )}
+                        <div className="text-xs font-semibold pl-6 opacity-95 break-words">
+                          {answerDetail}
                         </div>
                       </div>
                     );

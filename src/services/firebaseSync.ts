@@ -101,9 +101,34 @@ export function sanitizeRoomState(data: any, fallback?: RoomState): RoomState {
     ? data.questions
     : (data.questions && typeof data.questions === 'object' ? Object.values(data.questions) : null);
 
-  const questions: Question[] = rawQuestions !== null
+  const initialQuestions: Question[] = rawQuestions !== null
     ? (rawQuestions as Question[])
     : (fallback?.questions || []);
+
+  const questions: Question[] = initialQuestions.map((q) => {
+    if (!q || typeof q !== 'object') return q;
+    if (q.type === 'fill_blanks' && q.content) {
+      const c = q.content as any;
+      let blanks = Array.isArray(c.blanks)
+        ? c.blanks
+        : (c.blanks && typeof c.blanks === 'object' ? Object.values(c.blanks) : []);
+      if ((!blanks || blanks.length === 0) && c.blankWord) {
+        blanks = [{
+          id: 'b-0',
+          correctWord: c.blankWord,
+          distractors: Array.isArray(c.distractors) ? c.distractors : (c.distractors && typeof c.distractors === 'object' ? Object.values(c.distractors) : [])
+        }];
+      }
+      return {
+        ...q,
+        content: {
+          ...c,
+          blanks
+        }
+      };
+    }
+    return q;
+  });
 
   const curIndex = typeof data.currentQuestionIndex === 'number' && data.currentQuestionIndex >= 0
     ? Math.min(data.currentQuestionIndex, Math.max(0, (questions.length || 1) - 1))

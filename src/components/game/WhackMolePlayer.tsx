@@ -194,24 +194,37 @@ export const WhackMolePlayer: React.FC<WhackMolePlayerProps> = ({
   // Compute live score
   const totalScore = Math.max(0, correctHits * 10 - wrongHits * 10);
 
-  // Auto-send answer update to room so student score is always saved even if round ends
+  const hasGameStartedRef = useRef(false);
+  const mountTimeRef = useRef(Date.now());
+
   useEffect(() => {
-    onAnswer(correctHits > 0, {
-      correctCount: correctHits,
-      errorCount: wrongHits,
-      bonusPoints: totalScore,
-      targetCategory: category
-    });
-  }, [correctHits, wrongHits, category, totalScore]);
+    if (!disabled) {
+      hasGameStartedRef.current = true;
+    }
+  }, [disabled]);
+
+  // Submit answer only when round expires (after actually running) or when user explicitly finishes
+  useEffect(() => {
+    if (disabled && !submitted && hasGameStartedRef.current && Date.now() - mountTimeRef.current > 2500) {
+      setSubmitted(true);
+      onAnswer(correctHits > 0, {
+        correctCount: correctHits,
+        errorCount: wrongHits,
+        bonusPoints: totalScore,
+        targetCategory: category
+      });
+    }
+  }, [disabled, submitted, correctHits, wrongHits, category, totalScore]);
 
   const handleFinishEarly = () => {
-    if (disabled || submitted) return;
+    if (submitted) return;
     setSubmitted(true);
     onAnswer(correctHits > 0, {
       correctCount: correctHits,
       errorCount: wrongHits,
       bonusPoints: totalScore,
-      completedEarly: true
+      completedEarly: true,
+      targetCategory: category
     });
   };
 

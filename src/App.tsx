@@ -305,8 +305,54 @@ export default function App() {
       currentQ && currentQ.type === 'draw_vote' ? 'draw_gallery' : 'question_results';
 
     setRoomState((prev) => {
+      let finalAnswers = { ...prev.answersThisTurn };
+      let finalPlayers = { ...prev.players };
+
+      // For "La Parola Più Lunga": award +25 points to whoever created the longest word
+      if (currentQ && currentQ.type === 'longest_word') {
+        const answersList = Object.values(finalAnswers).filter(
+          (a) => a.isCorrect && (a.answerPayload?.length || a.answerPayload?.word?.length)
+        );
+
+        if (answersList.length > 0) {
+          const maxLen = Math.max(
+            ...answersList.map((a) => a.answerPayload?.length || a.answerPayload?.word?.length || 0)
+          );
+
+          if (maxLen > 0) {
+            answersList.forEach((a) => {
+              const aLen = a.answerPayload?.length || a.answerPayload?.word?.length || 0;
+              if (aLen === maxLen) {
+                const sub = finalAnswers[a.playerId];
+                if (sub && !sub.answerPayload?.hasWonLongestBonus) {
+                  finalAnswers[a.playerId] = {
+                    ...sub,
+                    pointsAwarded: sub.pointsAwarded + 25,
+                    answerPayload: {
+                      ...sub.answerPayload,
+                      hasWonLongestBonus: true,
+                      bonusAwarded: 25
+                    }
+                  };
+
+                  const pl = finalPlayers[a.playerId];
+                  if (pl) {
+                    finalPlayers[a.playerId] = {
+                      ...pl,
+                      score: pl.score + 25
+                    };
+                  }
+                }
+              }
+            });
+          }
+        }
+      }
+
       const updated: RoomState = {
         ...prev,
+        answersThisTurn: finalAnswers,
+        players: finalPlayers,
         phase: nextPhase
       };
       api.broadcastLocal(updated);
@@ -328,11 +374,14 @@ export default function App() {
     setRoomState((prev) => {
       const currentQ = prev.questions[prev.currentQuestionIndex];
       const isWordBuilder = currentQ && currentQ.type === 'word_builder';
+      const isLongestWord = currentQ && currentQ.type === 'longest_word';
+      const isMoleWhack = currentQ && currentQ.type === 'mole_whack';
+      const isContinuous = isWordBuilder || isLongestWord || isMoleWhack;
       const existingSubmission = prev.answersThisTurn[playerId];
 
       // For standard questions, don't allow duplicate submissions.
-      // For word_builder, allow continuous updates as new words are found.
-      if (existingSubmission && !isWordBuilder) return prev;
+      // For continuous games, allow live updates as player progresses.
+      if (existingSubmission && !isContinuous) return prev;
 
       const basePoints = currentQ ? currentQ.points : 50;
 
@@ -344,7 +393,7 @@ export default function App() {
       let speedRank: number | undefined = undefined;
       let bonus = 0;
 
-      if (isCorrect) {
+      if (isCorrect && !isContinuous) {
         if (prevCorrectCount === 0) {
           speedRank = 1;
           bonus = prev.settings.fastFingerBonus1; // +20
@@ -357,10 +406,30 @@ export default function App() {
         }
       }
 
-      // For word_builder: points = basePoints + (total guessed words * 10) + speed bonus
-      const wordCount = isWordBuilder && payload?.count ? payload.count : (payload?.words?.length || 1);
-      const wordBonus = isWordBuilder ? wordCount * 10 : 0;
-      const pointsAwarded = isCorrect ? basePoints + wordBonus + bonus : 0;
+      // Point calculation:
+      // 1. Word Builder: basePoints + totalLetters used (1 letter = 1 point)
+      // 2. Longest Word: basePoints + word length (1 letter = 1 point) + potential +25 bonus at end of round
+      // 3. Mole Whack: basePoints + mole hits score
+      // 4. Standard: basePoints + speed bonus
+      let pointsAwarded = 0;
+      if (isCorrect) {
+        if (isWordBuilder) {
+          const totalLetters =
+            payload?.totalLetters !== undefined
+              ? payload.totalLetters
+              : payload?.words
+              ? payload.words.reduce((acc: number, w: string) => acc + w.length, 0)
+              : 0;
+          pointsAwarded = basePoints + totalLetters;
+        } else if (isLongestWord) {
+          const wordLen = payload?.length || payload?.word?.length || 0;
+          pointsAwarded = basePoints + wordLen;
+        } else if (isMoleWhack) {
+          pointsAwarded = basePoints + (payload?.bonusPoints || 0);
+        } else {
+          pointsAwarded = basePoints + bonus;
+        }
+      }
 
       const previousPoints = existingSubmission ? existingSubmission.pointsAwarded : 0;
       const scoreDelta = pointsAwarded - previousPoints;

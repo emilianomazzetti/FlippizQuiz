@@ -15,11 +15,17 @@ export const FillBlanksPlayer: React.FC<FillBlanksPlayerProps> = ({
   onAnswer,
   disabled = false
 }) => {
-  // Normalize blanks: support either content.blanks array or single blankWord
+  // Normalize blanks: support either content.blanks array, object map, or single blankWord
   const blanksList: BlankItem[] = useMemo(() => {
-    if (content.blanks && content.blanks.length > 0) {
-      return content.blanks;
+    let list: BlankItem[] = [];
+    if (Array.isArray(content.blanks) && content.blanks.length > 0) {
+      list = content.blanks.filter((b) => b && b.correctWord);
+    } else if (content.blanks && typeof content.blanks === 'object') {
+      const vals = Object.values(content.blanks) as BlankItem[];
+      list = vals.filter((b) => b && b.correctWord);
     }
+    if (list.length > 0) return list;
+
     const singleWord = content.blankWord || '';
     return [
       {
@@ -71,30 +77,39 @@ export const FillBlanksPlayer: React.FC<FillBlanksPlayerProps> = ({
       return chosen === expected;
     });
 
-    onAnswer(isAllCorrect, { selectedWords, blanksList });
+    onAnswer(isAllCorrect, {
+      selectedWords,
+      blanksList,
+      userAnswers: blanksList.map((b) => selectedWords[b.id] || ''),
+      summary: blanksList.map((b) => `${selectedWords[b.id] || '---'}`).join(', ')
+    });
   };
 
   // Render text with inline vertical dropdown menus for blanks
   const renderSentenceWithDropdowns = () => {
     const rawTokens = (content.originalText || '').split(' ');
-    // Keep track of which blank index we're matching
-    let blankPointer = 0;
+    // Clone blanks to track matched items across the sentence tokens
+    const availableBlanks = [...blanksList];
+    let matchedBlankNumber = 0;
 
     return (
       <div className="flex flex-wrap items-center justify-center gap-2.5 text-lg md:text-xl font-semibold text-slate-100 leading-relaxed">
         {rawTokens.map((token, idx) => {
           const cleanToken = token.replace(/[^a-zA-Z0-9àèéìòùÀÈÉÌÒÙ]/g, '').toUpperCase();
-          const targetBlank = blanksList[blankPointer];
+          const matchedBlankIndex = availableBlanks.findIndex(
+            (b) => b && b.correctWord.trim().toUpperCase() === cleanToken
+          );
 
-          const isThisABlank =
-            targetBlank &&
-            cleanToken === targetBlank.correctWord.trim().toUpperCase();
+          if (matchedBlankIndex !== -1) {
+            const targetBlank = availableBlanks[matchedBlankIndex];
+            // Consume this blank so subsequent duplicate words can match next blank
+            availableBlanks[matchedBlankIndex] = null as any;
+            matchedBlankNumber++;
 
-          if (isThisABlank) {
-            blankPointer++;
             const blankId = targetBlank.id;
             const chosenVal = selectedWords[blankId] || '';
             const options = blankOptionsMap[blankId] || [targetBlank.correctWord];
+            const trailingPunctuation = token.match(/[^a-zA-Z0-9àèéìòùÀÈÉÌÒÙ]+$/)?.[0] || '';
 
             return (
               <span key={`token-${idx}-${blankId}`} className="inline-flex items-center mx-1 my-1">
@@ -103,14 +118,14 @@ export const FillBlanksPlayer: React.FC<FillBlanksPlayerProps> = ({
                     disabled={disabled || submitted}
                     value={chosenVal}
                     onChange={(e) => handleSelectChange(blankId, e.target.value)}
-                    className={`appearance-none font-bold text-sm md:text-base py-2 pl-3 pr-8 rounded-xl border-2 shadow-lg transition-all cursor-pointer focus:outline-none focus:ring-2 ${
+                    className={`appearance-none font-bold text-sm md:text-base py-2.5 pl-3.5 pr-9 rounded-xl border-2 shadow-lg transition-all cursor-pointer focus:outline-none focus:ring-2 ${
                       chosenVal
                         ? 'bg-amber-400 text-slate-950 border-amber-300 ring-amber-400/50 font-black'
-                        : 'bg-slate-900 text-amber-300 border-amber-400/80 hover:border-amber-300 animate-pulse'
+                        : 'bg-slate-900 text-amber-300 border-amber-400/80 hover:border-amber-300'
                     }`}
                   >
                     <option value="" disabled className="bg-slate-900 text-slate-400">
-                      ▼ Scegli parola ({blankPointer})
+                      ▼ Scegli parola ({matchedBlankNumber})
                     </option>
                     {options.map((opt, optIdx) => (
                       <option
@@ -122,8 +137,11 @@ export const FillBlanksPlayer: React.FC<FillBlanksPlayerProps> = ({
                       </option>
                     ))}
                   </select>
-                  <ChevronDown className="w-4 h-4 text-slate-900 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                  <ChevronDown className={`w-4 h-4 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none ${
+                    chosenVal ? 'text-slate-950' : 'text-amber-400'
+                  }`} />
                 </div>
+                {trailingPunctuation && <span className="text-slate-200 ml-0.5">{trailingPunctuation}</span>}
               </span>
             );
           }

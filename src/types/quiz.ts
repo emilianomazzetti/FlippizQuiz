@@ -17,7 +17,8 @@ export type QuestionType =
   | 'word_search'
   | 'math_challenge'
   | 'word_builder'
-  | 'mole_whack';
+  | 'mole_whack'
+  | 'longest_word';
 
 export interface MultipleChoiceOption {
   id: string;
@@ -117,6 +118,11 @@ export interface MoleWhackContent {
   gridSize: 3 | 4; // 3x3 (9 buche) o 4x4 (16 buche)
 }
 
+export interface LongestWordContent {
+  consonants: string[]; // 10 consonants chosen by creator
+  vowels: string[];     // 4 vowels chosen by creator
+}
+
 export type QuestionContent =
   | MultipleChoiceContent
   | TrueFalseContent
@@ -131,7 +137,8 @@ export type QuestionContent =
   | WordSearchContent
   | MathChallengeContent
   | WordBuilderContent
-  | MoleWhackContent;
+  | MoleWhackContent
+  | LongestWordContent;
 
 export interface Question {
   id: string;

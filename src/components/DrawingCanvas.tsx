@@ -5,6 +5,7 @@ interface DrawingCanvasProps {
   onSaveDrawing: (dataUrl: string) => void;
   disabled?: boolean;
   initialData?: string;
+  initialConfirmed?: boolean;
   height?: number;
 }
 
@@ -25,6 +26,7 @@ export const DrawingCanvas: React.FC<DrawingCanvasProps> = ({
   onSaveDrawing,
   disabled = false,
   initialData,
+  initialConfirmed = false,
   height = 360
 }) => {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -35,6 +37,13 @@ export const DrawingCanvas: React.FC<DrawingCanvasProps> = ({
   const [history, setHistory] = useState<ImageData[]>([]);
   const [hasDrawn, setHasDrawn] = useState(false);
   const [savedSuccess, setSavedSuccess] = useState(false);
+  const [isConfirmed, setIsConfirmed] = useState(initialConfirmed || !!initialData);
+
+  useEffect(() => {
+    if (initialConfirmed) {
+      setIsConfirmed(true);
+    }
+  }, [initialConfirmed]);
 
   const startPos = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
   const snapshot = useRef<ImageData | null>(null);
@@ -82,7 +91,7 @@ export const DrawingCanvas: React.FC<DrawingCanvasProps> = ({
   };
 
   const startDraw = (e: React.PointerEvent<HTMLCanvasElement>) => {
-    if (disabled) return;
+    if (disabled || isConfirmed) return;
     const canvas = canvasRef.current;
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
@@ -114,7 +123,7 @@ export const DrawingCanvas: React.FC<DrawingCanvasProps> = ({
   };
 
   const draw = (e: React.PointerEvent<HTMLCanvasElement>) => {
-    if (!isDrawing || disabled) return;
+    if (!isDrawing || disabled || isConfirmed) return;
     const canvas = canvasRef.current;
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
@@ -174,7 +183,7 @@ export const DrawingCanvas: React.FC<DrawingCanvasProps> = ({
   };
 
   const undo = () => {
-    if (history.length === 0) return;
+    if (disabled || isConfirmed || history.length === 0) return;
     const canvas = canvasRef.current;
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
@@ -187,6 +196,7 @@ export const DrawingCanvas: React.FC<DrawingCanvasProps> = ({
   };
 
   const clearCanvas = () => {
+    if (disabled || isConfirmed) return;
     const canvas = canvasRef.current;
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
@@ -198,129 +208,146 @@ export const DrawingCanvas: React.FC<DrawingCanvasProps> = ({
     triggerAutoSave();
   };
 
+  const handleConfirmDrawing = () => {
+    if (disabled || isConfirmed) return;
+    setIsConfirmed(true);
+    triggerAutoSave();
+  };
+
   return (
     <div className="flex flex-col gap-3 w-full max-w-xl mx-auto select-none">
-      {/* Canvas Toolset */}
-      <div className="flex flex-wrap items-center justify-between gap-2 p-2.5 bg-slate-850 border border-slate-700/80 rounded-2xl shadow-md">
-        {/* Tools */}
-        <div className="flex items-center gap-1">
-          <button
-            type="button"
-            onClick={() => setTool('brush')}
-            className={`p-2 rounded-xl text-xs font-semibold flex items-center gap-1 transition-all ${
-              tool === 'brush' ? 'bg-indigo-600 text-white shadow-sm' : 'text-slate-400 hover:bg-slate-750'
-            }`}
-            title="Pennello a mano libera"
-          >
-            <Brush className="w-4 h-4" />
-          </button>
-          <button
-            type="button"
-            onClick={() => setTool('eraser')}
-            className={`p-2 rounded-xl text-xs font-semibold flex items-center gap-1 transition-all ${
-              tool === 'eraser' ? 'bg-indigo-600 text-white shadow-sm' : 'text-slate-400 hover:bg-slate-750'
-            }`}
-            title="Gomma per cancellare"
-          >
-            <Eraser className="w-4 h-4" />
-          </button>
-          <div className="h-5 w-px bg-slate-700 mx-1" />
-          <button
-            type="button"
-            onClick={() => setTool('line')}
-            className={`p-2 rounded-xl transition-all ${
-              tool === 'line' ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:bg-slate-750'
-            }`}
-            title="Linea retta"
-          >
-            <Minus className="w-4 h-4" />
-          </button>
-          <button
-            type="button"
-            onClick={() => setTool('rect')}
-            className={`p-2 rounded-xl transition-all ${
-              tool === 'rect' ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:bg-slate-750'
-            }`}
-            title="Rettangolo"
-          >
-            <Square className="w-4 h-4" />
-          </button>
-          <button
-            type="button"
-            onClick={() => setTool('circle')}
-            className={`p-2 rounded-xl transition-all ${
-              tool === 'circle' ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:bg-slate-750'
-            }`}
-            title="Cerchio"
-          >
-            <Circle className="w-4 h-4" />
-          </button>
+      {isConfirmed ? (
+        <div className="p-4 bg-emerald-500/20 border-2 border-emerald-500/60 rounded-2xl flex items-center justify-center gap-3 text-emerald-300 font-bold shadow-lg animate-fade-in text-center">
+          <Check className="w-5 h-5 text-emerald-400 stroke-[3] shrink-0" />
+          <span>Disegno confermato e inviato! Non è più modificabile. Attendi la fase di voto con la stella ⭐</span>
         </div>
+      ) : (
+        <>
+          {/* Canvas Toolset */}
+          <div className="flex flex-wrap items-center justify-between gap-2 p-2.5 bg-slate-850 border border-slate-700/80 rounded-2xl shadow-md">
+            {/* Tools */}
+            <div className="flex items-center gap-1">
+              <button
+                type="button"
+                onClick={() => setTool('brush')}
+                className={`p-2 rounded-xl text-xs font-semibold flex items-center gap-1 transition-all ${
+                  tool === 'brush' ? 'bg-indigo-600 text-white shadow-sm' : 'text-slate-400 hover:bg-slate-750'
+                }`}
+                title="Pennello a mano libera"
+              >
+                <Brush className="w-4 h-4" />
+              </button>
+              <button
+                type="button"
+                onClick={() => setTool('eraser')}
+                className={`p-2 rounded-xl text-xs font-semibold flex items-center gap-1 transition-all ${
+                  tool === 'eraser' ? 'bg-indigo-600 text-white shadow-sm' : 'text-slate-400 hover:bg-slate-750'
+                }`}
+                title="Gomma per cancellare"
+              >
+                <Eraser className="w-4 h-4" />
+              </button>
+              <div className="h-5 w-px bg-slate-700 mx-1" />
+              <button
+                type="button"
+                onClick={() => setTool('line')}
+                className={`p-2 rounded-xl transition-all ${
+                  tool === 'line' ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:bg-slate-750'
+                }`}
+                title="Linea retta"
+              >
+                <Minus className="w-4 h-4" />
+              </button>
+              <button
+                type="button"
+                onClick={() => setTool('rect')}
+                className={`p-2 rounded-xl transition-all ${
+                  tool === 'rect' ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:bg-slate-750'
+                }`}
+                title="Rettangolo"
+              >
+                <Square className="w-4 h-4" />
+              </button>
+              <button
+                type="button"
+                onClick={() => setTool('circle')}
+                className={`p-2 rounded-xl transition-all ${
+                  tool === 'circle' ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:bg-slate-750'
+                }`}
+                title="Cerchio"
+              >
+                <Circle className="w-4 h-4" />
+              </button>
+            </div>
 
-        {/* Brush Size */}
-        <div className="flex items-center gap-2 px-2">
-          <span className="text-[11px] text-slate-400 font-bold">Tratto:</span>
-          {[3, 6, 12, 20].map((size) => (
-            <button
-              key={size}
-              type="button"
-              onClick={() => setBrushSize(size)}
-              className={`w-7 h-7 rounded-lg flex items-center justify-center transition-all ${
-                brushSize === size ? 'bg-indigo-500/30 ring-2 ring-indigo-400' : 'hover:bg-slate-750'
-              }`}
-            >
-              <div
-                className="rounded-full bg-white"
-                style={{ width: `${Math.max(4, size * 0.7)}px`, height: `${Math.max(4, size * 0.7)}px` }}
+            {/* Brush Size */}
+            <div className="flex items-center gap-2 px-2">
+              <span className="text-[11px] text-slate-400 font-bold">Tratto:</span>
+              {[3, 6, 12, 20].map((size) => (
+                <button
+                  key={size}
+                  type="button"
+                  onClick={() => setBrushSize(size)}
+                  className={`w-7 h-7 rounded-lg flex items-center justify-center transition-all ${
+                    brushSize === size ? 'bg-indigo-500/30 ring-2 ring-indigo-400' : 'hover:bg-slate-750'
+                  }`}
+                >
+                  <div
+                    className="rounded-full bg-white"
+                    style={{ width: `${Math.max(4, size * 0.7)}px`, height: `${Math.max(4, size * 0.7)}px` }}
+                  />
+                </button>
+              ))}
+            </div>
+
+            {/* Undo & Clear */}
+            <div className="flex items-center gap-1">
+              <button
+                type="button"
+                disabled={history.length === 0}
+                onClick={undo}
+                className="p-2 text-slate-400 hover:text-white hover:bg-slate-750 rounded-xl disabled:opacity-30 transition-colors"
+                title="Annulla ultimo tratto"
+              >
+                <RotateCcw className="w-4 h-4" />
+              </button>
+              <button
+                type="button"
+                onClick={clearCanvas}
+                className="px-2.5 py-1 text-xs text-rose-400 hover:bg-rose-500/10 rounded-xl transition-colors font-bold"
+              >
+                Pulisci
+              </button>
+            </div>
+          </div>
+
+          {/* Color Palette */}
+          <div className="flex items-center justify-center gap-2 p-2 bg-slate-850/80 rounded-xl border border-slate-750">
+            <Palette className="w-3.5 h-3.5 text-slate-400 mr-1" />
+            {COLORS.map((c) => (
+              <button
+                key={c}
+                type="button"
+                onClick={() => {
+                  setColor(c);
+                  if (tool === 'eraser') setTool('brush');
+                }}
+                className={`w-7 h-7 rounded-full transition-transform cursor-pointer ${
+                  color === c && tool !== 'eraser'
+                    ? 'scale-125 ring-2 ring-amber-400 ring-offset-2 ring-offset-slate-900 shadow-md'
+                    : 'hover:scale-110 opacity-90'
+                }`}
+                style={{ backgroundColor: c }}
               />
-            </button>
-          ))}
-        </div>
-
-        {/* Undo & Clear */}
-        <div className="flex items-center gap-1">
-          <button
-            type="button"
-            disabled={history.length === 0}
-            onClick={undo}
-            className="p-2 text-slate-400 hover:text-white hover:bg-slate-750 rounded-xl disabled:opacity-30 transition-colors"
-            title="Annulla ultimo tratto"
-          >
-            <RotateCcw className="w-4 h-4" />
-          </button>
-          <button
-            type="button"
-            onClick={clearCanvas}
-            className="px-2.5 py-1 text-xs text-rose-400 hover:bg-rose-500/10 rounded-xl transition-colors font-bold"
-          >
-            Pulisci
-          </button>
-        </div>
-      </div>
-
-      {/* Color Palette */}
-      <div className="flex items-center justify-center gap-2 p-2 bg-slate-850/80 rounded-xl border border-slate-750">
-        <Palette className="w-3.5 h-3.5 text-slate-400 mr-1" />
-        {COLORS.map((c) => (
-          <button
-            key={c}
-            type="button"
-            onClick={() => {
-              setColor(c);
-              if (tool === 'eraser') setTool('brush');
-            }}
-            className={`w-7 h-7 rounded-full transition-transform cursor-pointer ${
-              color === c && tool !== 'eraser'
-                ? 'scale-125 ring-2 ring-amber-400 ring-offset-2 ring-offset-slate-900 shadow-md'
-                : 'hover:scale-110 opacity-90'
-            }`}
-            style={{ backgroundColor: c }}
-          />
-        ))}
-      </div>
+            ))}
+          </div>
+        </>
+      )}
 
       {/* Main Drawing Canvas with Touch Action None & Pointer Events */}
-      <div className="relative rounded-2xl overflow-hidden border-2 border-slate-750 shadow-2xl bg-slate-950">
+      <div className={`relative rounded-2xl overflow-hidden border-2 shadow-2xl bg-slate-950 ${
+        isConfirmed ? 'border-emerald-500/60 pointer-events-none' : 'border-slate-750'
+      }`}>
         <canvas
           ref={canvasRef}
           width={640}
@@ -330,7 +357,9 @@ export const DrawingCanvas: React.FC<DrawingCanvasProps> = ({
           onPointerMove={draw}
           onPointerUp={stopDraw}
           onPointerCancel={stopDraw}
-          className="w-full h-auto cursor-crosshair block bg-slate-950"
+          className={`w-full h-auto block bg-slate-950 ${
+            isConfirmed ? 'cursor-default pointer-events-none' : 'cursor-crosshair'
+          }`}
         />
 
         {savedSuccess && (
@@ -342,19 +371,21 @@ export const DrawingCanvas: React.FC<DrawingCanvasProps> = ({
       </div>
 
       {/* Explicit Save & Send Button */}
-      <div className="flex items-center justify-between gap-3">
-        <p className="text-xs text-slate-400">
-          Disegna con il dito o il mouse. Il disegno viene salvato automaticamente in tempo reale!
-        </p>
-        <button
-          type="button"
-          onClick={triggerAutoSave}
-          className="px-4 py-2 bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-400 hover:to-teal-500 text-white font-black text-xs rounded-xl shadow-md flex items-center gap-1.5 transition-transform active:scale-95 shrink-0"
-        >
-          <Send className="w-3.5 h-3.5" />
-          Conferma Disegno
-        </button>
-      </div>
+      {!isConfirmed && (
+        <div className="flex items-center justify-between gap-3">
+          <p className="text-xs text-slate-400">
+            Disegna con il dito o il mouse. Quando hai finito, tocca Conferma Disegno per inviarlo alla classe!
+          </p>
+          <button
+            type="button"
+            onClick={handleConfirmDrawing}
+            className="px-5 py-2.5 bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-400 hover:to-teal-500 text-white font-black text-sm rounded-xl shadow-lg flex items-center gap-2 transition-transform active:scale-95 shrink-0 cursor-pointer"
+          >
+            <Send className="w-4 h-4" />
+            Conferma Disegno
+          </button>
+        </div>
+      )}
     </div>
   );
 };

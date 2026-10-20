@@ -15,6 +15,7 @@ import {
   MathChallengeContent,
   WordBuilderContent,
   MoleWhackContent,
+  LongestWordContent,
   DrawingSubmission
 } from '../../types/quiz';
 import { MultipleChoicePlayer } from './MultipleChoicePlayer';
@@ -31,6 +32,7 @@ import { WordSearchPlayer } from './WordSearchPlayer';
 import { MathChallengePlayer } from './MathChallengePlayer';
 import { WordBuilderPlayer } from './WordBuilderPlayer';
 import { WhackMolePlayer } from './WhackMolePlayer';
+import { LongestWordPlayer } from './LongestWordPlayer';
 
 interface QuestionRendererProps {
   question: Question;
@@ -198,6 +200,16 @@ export const QuestionRenderer: React.FC<QuestionRendererProps> = ({
         <WhackMolePlayer
           key={question.id}
           content={question.content as MoleWhackContent}
+          onAnswer={onAnswer}
+          disabled={disabled}
+        />
+      );
+
+    case 'longest_word':
+      return (
+        <LongestWordPlayer
+          key={question.id}
+          content={question.content as LongestWordContent}
           onAnswer={onAnswer}
           disabled={disabled}
         />

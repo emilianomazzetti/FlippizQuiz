@@ -58,14 +58,25 @@ export const WordBuilderPlayer: React.FC<WordBuilderPlayerProps> = ({
     setCreatedWords(updated);
     setCurrentInput('');
 
+    // Score rule: 1 letter = 1 point across all valid words formed
+    const totalLetters = updated.reduce((acc, w) => acc + w.length, 0);
+
     // Update parent with current score count
-    onAnswer(true, { words: updated, count: updated.length });
+    onAnswer(true, {
+      words: updated,
+      count: updated.length,
+      totalLetters,
+      lastWord: word,
+      summary: `${updated.length} parole (${totalLetters} lettere)`
+    });
   };
 
   const insertChar = (char: string) => {
     if (disabled) return;
     setCurrentInput((prev) => prev + char);
   };
+
+  const totalLettersUsed = createdWords.reduce((acc, w) => acc + w.length, 0);
 
   return (
     <div className="w-full max-w-2xl mx-auto flex flex-col gap-6">
@@ -103,7 +114,7 @@ export const WordBuilderPlayer: React.FC<WordBuilderPlayerProps> = ({
           ))}
         </div>
         <p className="text-xs text-slate-400">
-          Tocca le lettere o scrivi sulla tastiera. Più parole formi prima dello scadere del tempo, più punti guadagni!
+          Componi quante più parole possibili prima dello scadere del tempo. <strong>Regola: 1 lettera = 1 punto!</strong>
         </p>
       </div>
 
@@ -125,7 +136,7 @@ export const WordBuilderPlayer: React.FC<WordBuilderPlayerProps> = ({
           <button
             type="submit"
             disabled={disabled || !currentInput.trim()}
-            className="px-6 py-3.5 rounded-2xl bg-emerald-600 hover:bg-emerald-500 disabled:opacity-40 text-white font-bold flex items-center gap-2 shadow-lg transition-colors"
+            className="px-6 py-3.5 rounded-2xl bg-emerald-600 hover:bg-emerald-500 disabled:opacity-40 text-white font-bold flex items-center gap-2 shadow-lg transition-colors cursor-pointer"
           >
             <Plus className="w-5 h-5" />
             Aggiungi
@@ -146,8 +157,8 @@ export const WordBuilderPlayer: React.FC<WordBuilderPlayerProps> = ({
           <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider">
             Le tue parole valide ({createdWords.length}):
           </h4>
-          <span className="text-xs font-extrabold text-emerald-400">
-            +{createdWords.length * 10} punti accumulati
+          <span className="text-xs font-black text-emerald-400 bg-emerald-500/20 px-3 py-1 rounded-full border border-emerald-500/40">
+            {totalLettersUsed} lettere (+{totalLettersUsed} pt)
           </span>
         </div>
 
@@ -158,7 +169,8 @@ export const WordBuilderPlayer: React.FC<WordBuilderPlayerProps> = ({
               className="px-3 py-1.5 rounded-xl bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 text-sm font-black flex items-center gap-1.5 animate-scale-up"
             >
               <Check className="w-3.5 h-3.5" />
-              {w}
+              <span>{w}</span>
+              <span className="text-[11px] text-emerald-400/80 font-mono">({w.length} pt)</span>
             </div>
           ))}
           {createdWords.length === 0 && (
