@@ -129,24 +129,56 @@ export const StudentDevice: React.FC<StudentDeviceProps> = ({
     }
   }, [roomState.phase, myAnswer]);
 
-  // Keep student in "create" tab whenever room is in lobby
+  const [joinError, setJoinError] = useState<string | null>(null);
+
+  // Active question check: does this student already have a question in the repository?
+  const myCreatedQuestion = activePlayer
+    ? roomState.questions?.find(
+        (q) =>
+          q.creatorName?.trim().toLowerCase() === activePlayer.name?.trim().toLowerCase() ||
+          (q as any).creatorId === activePlayer.id
+      )
+    : undefined;
+  const hasActiveQuestion = !!myCreatedQuestion;
+
+  // Manage lobby tab:
+  // - If student already has a question in repository: stay in 'play' ("Stato Attesa Quiz")
+  // - If no question (or teacher deleted it): stay in 'create' ("Crea una Domanda")
   useEffect(() => {
     if (roomState.phase === 'lobby') {
-      setActiveTab('create');
+      if (hasActiveQuestion) {
+        setActiveTab('play');
+      } else {
+        setActiveTab('create');
+      }
     }
-  }, [roomState.phase]);
+  }, [roomState.phase, hasActiveQuestion]);
 
   const handleJoin = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!name.trim()) return;
-    onJoinRoom(name.trim(), selectedAvatar, pin.trim());
-    setActiveTab('create');
+    const cleanName = name.trim();
+    if (!cleanName) return;
+
+    // Check duplicate student name (case-insensitive)
+    const existingPlayers = Object.values(roomState.players || {});
+    const isDuplicate = existingPlayers.some(
+      (p) => p.name.trim().toLowerCase() === cleanName.toLowerCase()
+    );
+
+    if (isDuplicate) {
+      setJoinError(`Il nome "${cleanName}" è già presente nella sessione. Scegli un nome diverso o aggiungi l'iniziale del cognome (es. ${cleanName} M.).`);
+      return;
+    }
+
+    setJoinError(null);
+    onJoinRoom(cleanName, selectedAvatar, pin.trim());
   };
 
   const handleCreatedQuestion = (q: Question) => {
+    if (hasActiveQuestion) return; // Only 1 question allowed per student
     onSubmitQuestion(q);
     setHasCreatedQuestion(true);
-    setActiveTab('create');
+    setActiveTab('play'); // Immediately navigate to "Stato Attesa Quiz"
   };
 
   // 1. NOT LOGGED IN: Join Screen
@@ -169,6 +201,12 @@ export const StudentDevice: React.FC<StudentDeviceProps> = ({
           </div>
         )}
 
+        {joinError && (
+          <div className="p-3 bg-rose-500/20 border border-rose-500/40 rounded-2xl text-rose-300 text-xs text-center font-bold animate-fade-in">
+            {joinError}
+          </div>
+        )}
+
         <form onSubmit={handleJoin} className="space-y-5">
           <div>
             <label className="text-xs font-bold text-slate-400 block mb-1">
@@ -178,7 +216,10 @@ export const StudentDevice: React.FC<StudentDeviceProps> = ({
               type="text"
               required
               value={pin}
-              onChange={(e) => setPin(e.target.value.toUpperCase())}
+              onChange={(e) => {
+                setPin(e.target.value.toUpperCase());
+                setJoinError(null);
+              }}
               placeholder="FLIP-XXX"
               className="w-full bg-slate-800 border border-slate-700 rounded-2xl px-4 py-3 text-lg font-black tracking-widest text-center text-amber-300 uppercase focus:outline-none focus:ring-2 focus:ring-indigo-500 font-mono"
             />
@@ -186,13 +227,16 @@ export const StudentDevice: React.FC<StudentDeviceProps> = ({
 
           <div>
             <label className="text-xs font-bold text-slate-400 block mb-1">
-              Il tuo Nome da Banco:
+              Il tuo Nome:
             </label>
             <input
               type="text"
               required
               value={name}
-              onChange={(e) => setName(e.target.value)}
+              onChange={(e) => {
+                setName(e.target.value);
+                setJoinError(null);
+              }}
               placeholder="Es. Leonardo, Sofia, Matteo..."
               className="w-full bg-slate-800 border border-slate-700 rounded-2xl px-4 py-3 text-base font-bold text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
               autoFocus
@@ -277,20 +321,28 @@ export const StudentDevice: React.FC<StudentDeviceProps> = ({
       {/* Tabs during lobby: Play vs Create */}
       {roomState.phase === 'lobby' && (
         <div className="flex bg-slate-900 p-1.5 rounded-2xl border border-slate-800 gap-2">
-          <button
-            onClick={() => setActiveTab('create')}
-            className={`flex-1 py-2.5 rounded-xl text-xs font-black flex items-center justify-center gap-2 transition-all ${
-              activeTab === 'create'
-                ? 'bg-indigo-600 text-white shadow-md'
-                : 'text-slate-400 hover:text-white'
-            }`}
-          >
-            <PlusCircle className="w-4 h-4" />
-            Crea una Domanda
-          </button>
+          {!hasActiveQuestion ? (
+            <button
+              onClick={() => setActiveTab('create')}
+              className={`flex-1 py-2.5 rounded-xl text-xs font-black flex items-center justify-center gap-2 transition-all cursor-pointer ${
+                activeTab === 'create'
+                  ? 'bg-indigo-600 text-white shadow-md'
+                  : 'text-slate-400 hover:text-white'
+              }`}
+            >
+              <PlusCircle className="w-4 h-4" />
+              Crea una Domanda
+            </button>
+          ) : (
+            <div className="flex-1 py-2.5 px-3 rounded-xl text-xs font-bold text-emerald-300 bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center gap-2">
+              <CheckCircle className="w-4 h-4 text-emerald-400" />
+              Domanda Inviata (1 max)
+            </div>
+          )}
+
           <button
             onClick={() => setActiveTab('play')}
-            className={`flex-1 py-2.5 rounded-xl text-xs font-black flex items-center justify-center gap-2 transition-all ${
+            className={`flex-1 py-2.5 rounded-xl text-xs font-black flex items-center justify-center gap-2 transition-all cursor-pointer ${
               activeTab === 'play'
                 ? 'bg-indigo-600 text-white shadow-md'
                 : 'text-slate-400 hover:text-white'
@@ -303,7 +355,7 @@ export const StudentDevice: React.FC<StudentDeviceProps> = ({
       )}
 
       {/* TAB: CREATE QUESTION */}
-      {roomState.phase === 'lobby' && activeTab === 'create' && (
+      {roomState.phase === 'lobby' && activeTab === 'create' && !hasActiveQuestion && (
         <QuestionCreator
           creatorName={activePlayer.name}
           onSubmitQuestion={handleCreatedQuestion}
@@ -311,7 +363,7 @@ export const StudentDevice: React.FC<StudentDeviceProps> = ({
       )}
 
       {/* TAB: WAITING IN LOBBY */}
-      {roomState.phase === 'lobby' && activeTab === 'play' && (
+      {roomState.phase === 'lobby' && (activeTab === 'play' || hasActiveQuestion) && (
         <div className="bg-slate-900 border border-slate-800 p-8 rounded-3xl text-center space-y-6 shadow-2xl">
           <div className="w-20 h-20 mx-auto rounded-3xl bg-indigo-500/20 text-indigo-400 flex items-center justify-center text-4xl animate-bounce">
             ⏳
@@ -320,17 +372,35 @@ export const StudentDevice: React.FC<StudentDeviceProps> = ({
           <div className="space-y-2">
             <h3 className="text-2xl font-black text-white">In Attesa del Docente</h3>
             <p className="text-xs text-slate-400 max-w-sm mx-auto">
-              Guarda lo schermo della LIM: quando tutti gli studenti avranno inserito le loro
-              domande, il docente avvierà la sfida live!
+              Guarda lo schermo della LIM: quando tutti gli studenti avranno inserito la loro
+              domanda, il docente avvierà la sfida live per tutta la classe!
             </p>
           </div>
 
-          {hasCreatedQuestion && (
+          {myCreatedQuestion ? (
+            <div className="p-5 bg-emerald-500/15 border-2 border-emerald-500/50 rounded-3xl text-left space-y-2 shadow-xl animate-fade-in">
+              <div className="flex items-center gap-2 text-emerald-300 text-xs font-black uppercase tracking-wider">
+                <CheckCircle className="w-4 h-4 text-emerald-400 shrink-0" />
+                La tua domanda è nel repository della classe:
+              </div>
+              <p className="text-base font-extrabold text-white">
+                "{myCreatedQuestion.title}"
+              </p>
+              <div className="flex items-center gap-2 text-[11px] text-emerald-300/90 font-medium">
+                <span>Tipo: <strong className="capitalize">{myCreatedQuestion.type.replace('_', ' ')}</strong></span>
+                <span>•</span>
+                <span>Tempo: {myCreatedQuestion.timeLimit}s</span>
+              </div>
+              <p className="text-[11px] text-slate-300 pt-2 border-t border-emerald-500/30">
+                💡 Ogni studente può inviare <strong>una singola domanda</strong>. Se il docente la cancella dal repository della LIM, potrai formularne un'altra!
+              </p>
+            </div>
+          ) : hasCreatedQuestion ? (
             <div className="p-4 bg-emerald-500/10 border border-emerald-500/30 rounded-2xl text-xs text-emerald-300 font-bold flex items-center justify-center gap-2">
               <CheckCircle className="w-4 h-4" />
               La tua domanda è stata inserita con successo nel repository della classe!
             </div>
-          )}
+          ) : null}
 
           {onStartQuiz && (
             <div className="pt-4 border-t border-slate-800">

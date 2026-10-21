@@ -43,6 +43,7 @@ export function getAppBaseUrl(): string {
 export default function App() {
   // View mode: Teacher Monitor (LIM) vs Student Mobile
   const [viewRole, setViewRole] = useState<'teacher' | 'student'>('teacher');
+  const [isLockedStudent, setIsLockedStudent] = useState<boolean>(false);
   const [isGuideOpen, setIsGuideOpen] = useState<boolean>(false);
   const [isFirebaseModalOpen, setIsFirebaseModalOpen] = useState<boolean>(false);
   const [isFirebaseOnline, setIsFirebaseOnline] = useState<boolean>(false);
@@ -88,7 +89,7 @@ export default function App() {
   const timerRef = useRef<NodeJS.Timeout | null>(null);
   const botAnswerTimeouts = useRef<NodeJS.Timeout[]>([]);
 
-  // Check URL query parameters (e.g. ?pin=FLIP-101 from QR code)
+  // Check URL query parameters (e.g. ?pin=FLIP-101&role=student from QR code)
   useEffect(() => {
     if (typeof window === 'undefined') return;
     try {
@@ -96,11 +97,13 @@ export default function App() {
       const pinParam = searchParams.get('pin');
       const roleParam = searchParams.get('role');
 
-      if (pinParam) {
-        setInitialPin(pinParam.toUpperCase());
+      // Users accessing through QR code / student link can NEVER enter Teacher view
+      if (pinParam || roleParam === 'student') {
+        setIsLockedStudent(true);
         setViewRole('student');
-      } else if (roleParam === 'student') {
-        setViewRole('student');
+        if (pinParam) {
+          setInitialPin(pinParam.toUpperCase());
+        }
       }
     } catch (e) {
       console.warn('URL parsing note:', e);
@@ -491,10 +494,22 @@ export default function App() {
 
   // Student joining room
   const handleJoinRoom = (name: string, avatar: string, pin: string) => {
+    const cleanName = name.trim();
+
+    // Check duplicate student name (case-insensitive)
+    const existingPlayers = Object.values(roomState.players || {});
+    const isDuplicate = existingPlayers.some(
+      (p) => p.name.trim().toLowerCase() === cleanName.toLowerCase()
+    );
+    if (isDuplicate) {
+      alert(`Il nome "${cleanName}" è già presente nella sessione. Scegli un nome diverso o aggiungi l'iniziale del cognome.`);
+      return;
+    }
+
     const newPlayerId = `p-${Date.now()}`;
     const newPlayer: Player = {
       id: newPlayerId,
-      name,
+      name: cleanName,
       avatar,
       score: 0,
       streak: 0,
@@ -942,37 +957,44 @@ export default function App() {
                 </span>
               </div>
               <p className="text-[11px] text-slate-400">
-                Gli studenti creano da banco • Il docente avvia live sulla LIM
+                Gli studenti creano le domande • Il docente avvia live sulla LIM
               </p>
             </div>
           </div>
 
-          {/* Mode Switcher: LIM vs Smartphone */}
-          <div className="flex items-center gap-2 bg-slate-950 p-1 rounded-2xl border border-slate-800">
-            <button
-              onClick={() => setViewRole('teacher')}
-              className={`px-3.5 py-1.5 rounded-xl text-xs font-black flex items-center gap-2 transition-all cursor-pointer ${
-                viewRole === 'teacher'
-                  ? 'bg-gradient-to-r from-indigo-500 to-purple-600 text-white shadow-md'
-                  : 'text-slate-400 hover:text-slate-200'
-              }`}
-            >
-              <Monitor className="w-3.5 h-3.5" />
-              Schermo Docente (LIM)
-            </button>
+          {/* Mode Switcher: LIM vs Dispositivo Studente (Hidden if joined via QR code) */}
+          {!isLockedStudent ? (
+            <div className="flex items-center gap-2 bg-slate-950 p-1 rounded-2xl border border-slate-800">
+              <button
+                onClick={() => setViewRole('teacher')}
+                className={`px-3.5 py-1.5 rounded-xl text-xs font-black flex items-center gap-2 transition-all cursor-pointer ${
+                  viewRole === 'teacher'
+                    ? 'bg-gradient-to-r from-indigo-500 to-purple-600 text-white shadow-md'
+                    : 'text-slate-400 hover:text-slate-200'
+                }`}
+              >
+                <Monitor className="w-3.5 h-3.5" />
+                Schermo Docente (LIM)
+              </button>
 
-            <button
-              onClick={() => setViewRole('student')}
-              className={`px-3.5 py-1.5 rounded-xl text-xs font-black flex items-center gap-2 transition-all cursor-pointer ${
-                viewRole === 'student'
-                  ? 'bg-gradient-to-r from-emerald-500 to-teal-600 text-white shadow-md'
-                  : 'text-slate-400 hover:text-slate-200'
-              }`}
-            >
+              <button
+                onClick={() => setViewRole('student')}
+                className={`px-3.5 py-1.5 rounded-xl text-xs font-black flex items-center gap-2 transition-all cursor-pointer ${
+                  viewRole === 'student'
+                    ? 'bg-gradient-to-r from-emerald-500 to-teal-600 text-white shadow-md'
+                    : 'text-slate-400 hover:text-slate-200'
+                }`}
+              >
+                <Smartphone className="w-3.5 h-3.5" />
+                Dispositivo Studente
+              </button>
+            </div>
+          ) : (
+            <div className="flex items-center gap-2 px-3.5 py-1.5 rounded-xl bg-emerald-500/15 border border-emerald-500/30 text-emerald-300 text-xs font-black shadow-sm">
               <Smartphone className="w-3.5 h-3.5" />
-              Dispositivo Studente (Banco)
-            </button>
-          </div>
+              <span>Dispositivo Studente</span>
+            </div>
+          )}
 
           {/* Firebase Connection & Guide Buttons */}
           <div className="flex items-center gap-2">
@@ -1000,7 +1022,7 @@ export default function App() {
               className="px-3 py-1.5 rounded-xl bg-slate-850 hover:bg-slate-800 border border-slate-700 text-xs font-bold text-slate-200 hover:text-white flex items-center gap-1.5 transition-colors shadow-sm cursor-pointer"
             >
               <BookOpen className="w-3.5 h-3.5" />
-              Guida & Architettura
+              Guida
             </button>
           </div>
         </div>

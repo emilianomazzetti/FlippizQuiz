@@ -404,13 +404,13 @@ export const TeacherMonitor: React.FC<TeacherMonitorProps> = ({
                 Inquadra per Partecipare
               </span>
 
-              <QRCodeDisplay value={`${appUrl}?pin=${roomState.roomCode}`} size={220} />
+              <QRCodeDisplay value={`${appUrl}?pin=${roomState.roomCode}&role=student`} size={220} />
 
               <div className="mt-5 w-full p-3.5 bg-slate-950 rounded-2xl border border-slate-800 flex items-center justify-between">
-                <span className="text-xs text-slate-400 font-bold">Link diretto:</span>
+                <span className="text-xs text-slate-400 font-bold">Link diretto studente:</span>
                 <button
                   onClick={() => {
-                    navigator.clipboard.writeText(`${appUrl}?pin=${roomState.roomCode}`);
+                    navigator.clipboard.writeText(`${appUrl}?pin=${roomState.roomCode}&role=student`);
                     setCopiedLink(true);
                     setTimeout(() => setCopiedLink(false), 2000);
                   }}

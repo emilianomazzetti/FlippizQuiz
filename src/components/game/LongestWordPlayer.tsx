@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
 import { LongestWordContent } from '../../types/quiz';
-import { canFormWord, isValidItalianWord } from '../../utils/wordDictionary';
+import { canFormWord, isValidItalianWord, verifyItalianWordOnline } from '../../utils/wordDictionary';
 import { sound } from '../../utils/audio';
-import { Trophy, Check, AlertCircle, Sparkles, Send, Award } from 'lucide-react';
+import { Trophy, Check, AlertCircle, Sparkles, Send, Award, Loader2 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 
 interface LongestWordPlayerProps {
@@ -24,10 +24,11 @@ export const LongestWordPlayer: React.FC<LongestWordPlayerProps> = ({
   const [bestWord, setBestWord] = useState('');
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const [isValidating, setIsValidating] = useState(false);
 
-  const handleTestWord = (e: React.FormEvent) => {
+  const handleTestWord = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (disabled || !currentInput.trim()) return;
+    if (disabled || !currentInput.trim() || isValidating) return;
 
     const word = currentInput.trim().toUpperCase();
     setErrorMessage(null);
@@ -45,8 +46,15 @@ export const LongestWordPlayer: React.FC<LongestWordPlayerProps> = ({
       return;
     }
 
-    // Rule 3: Valid Italian word check
-    if (!isValidItalianWord(word)) {
+    // Rule 3: Valid Italian word check (instant offline set + online verification fallback)
+    setIsValidating(true);
+    let isValid = isValidItalianWord(word);
+    if (!isValid) {
+      isValid = await verifyItalianWordOnline(word);
+    }
+    setIsValidating(false);
+
+    if (!isValid) {
       setErrorMessage(`"${word}" non è stata trovata nel vocabolario italiano.`);
       return;
     }

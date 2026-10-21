@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { WordBuilderContent } from '../../types/quiz';
-import { canFormWord, isValidItalianWord } from '../../utils/wordDictionary';
+import { canFormWord, isValidItalianWord, verifyItalianWordOnline } from '../../utils/wordDictionary';
 import { Plus, Check, AlertCircle } from 'lucide-react';
 import { sound } from '../../utils/audio';
 
@@ -18,12 +18,13 @@ export const WordBuilderPlayer: React.FC<WordBuilderPlayerProps> = ({
   const [currentInput, setCurrentInput] = useState('');
   const [createdWords, setCreatedWords] = useState<string[]>([]);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [isValidating, setIsValidating] = useState(false);
 
   const allAvailableLetters = [...content.consonants, ...content.vowels];
 
-  const handleAddWord = (e: React.FormEvent) => {
+  const handleAddWord = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (disabled || !currentInput.trim()) return;
+    if (disabled || !currentInput.trim() || isValidating) return;
 
     const word = currentInput.trim().toUpperCase();
     setErrorMessage(null);
@@ -46,9 +47,16 @@ export const WordBuilderPlayer: React.FC<WordBuilderPlayerProps> = ({
       return;
     }
 
-    // Rule 4: Valid Italian dictionary check
-    if (!isValidItalianWord(word)) {
-      setErrorMessage('Parola non riconosciuta nel dizionario.');
+    // Rule 4: Valid Italian dictionary check (instant offline set + online verification fallback)
+    setIsValidating(true);
+    let isValid = isValidItalianWord(word);
+    if (!isValid) {
+      isValid = await verifyItalianWordOnline(word);
+    }
+    setIsValidating(false);
+
+    if (!isValid) {
+      setErrorMessage(`"${word}" non è stata trovata nel vocabolario italiano.`);
       return;
     }
 
