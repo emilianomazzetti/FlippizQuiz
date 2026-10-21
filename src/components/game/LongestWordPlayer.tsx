@@ -46,7 +46,13 @@ export const LongestWordPlayer: React.FC<LongestWordPlayerProps> = ({
       return;
     }
 
-    // Rule 3: Valid Italian word check (instant offline set + online verification fallback)
+    // Rule 3: Mandatory vowel check (in Italian every word must contain at least one vowel)
+    if (!/[AEIOUÀÈÉÌÒÙ]/i.test(word)) {
+      setErrorMessage(`"${word}" non contiene alcuna vocale. In italiano tutte le parole devono avere almeno una vocale!`);
+      return;
+    }
+
+    // Rule 4: Valid Italian word check (instant offline set + online verification fallback)
     setIsValidating(true);
     let isValid = isValidItalianWord(word);
     if (!isValid) {
@@ -55,7 +61,7 @@ export const LongestWordPlayer: React.FC<LongestWordPlayerProps> = ({
     setIsValidating(false);
 
     if (!isValid) {
-      setErrorMessage(`"${word}" non è stata trovata nel vocabolario italiano.`);
+      setErrorMessage(`"${word}" non è stata trovata nel vocabolario della lingua italiana.`);
       return;
     }
 

@@ -4,7 +4,15 @@ import {
   Question,
   Player,
   AnswerSubmission,
-  DrawingSubmission
+  DrawingSubmission,
+  DrawVoteContent,
+  MoleWhackContent,
+  WordBuilderContent,
+  LongestWordContent,
+  FillBlanksContent,
+  AnagramContent,
+  MemoryMatchContent,
+  CellIdentifyContent
 } from '../types/quiz';
 import { QRCodeDisplay } from './QRCodeDisplay';
 import { sound } from '../utils/audio';
@@ -33,7 +41,8 @@ import {
   Flag,
   AlertTriangle,
   StopCircle,
-  UserX
+  UserX,
+  Info
 } from 'lucide-react';
 
 interface TeacherMonitorProps {
@@ -318,6 +327,576 @@ export const TeacherMonitor: React.FC<TeacherMonitorProps> = ({
       setConfigSavedToast(false);
       setIsConfigOpen(false);
     }, 1200);
+  };
+
+  // Helper to render pedagogical activity explanation, type banner, and non-spoiler content on teacher monitor
+  const renderActiveQuestionBoard = (q: Question) => {
+    switch (q.type) {
+      case 'multiple_choice':
+        return (
+          <div className="space-y-6">
+            <div className="flex flex-wrap items-center justify-between gap-3 pb-4 border-b border-slate-800">
+              <div className="inline-flex items-center gap-2 px-4 py-2 rounded-2xl bg-blue-500/20 border border-blue-500/40 text-blue-300 text-xs font-black uppercase tracking-wider shadow-sm">
+                <span className="text-base">📝</span> Tipo di Prova: Risposta Multipla
+              </div>
+              <div className="text-xs text-slate-400">
+                Creata dallo studente: <strong className="text-amber-300 font-bold">{q.creatorName}</strong>
+              </div>
+            </div>
+
+            {/* Come Funziona */}
+            <div className="p-4 bg-slate-950/80 border border-blue-500/30 rounded-2xl text-left flex items-start gap-3">
+              <Info className="w-5 h-5 text-blue-400 shrink-0 mt-0.5" />
+              <div className="text-xs text-slate-300 space-y-1">
+                <p className="font-black text-white text-sm">Come funziona:</p>
+                <p className="leading-relaxed">
+                  Scegli una delle opzioni disponibili sul tuo dispositivo e rispondi prima dello scadere del tempo. I 3 studenti più veloci ottengono un punteggio bonus per il dito più rapido!
+                </p>
+              </div>
+            </div>
+
+            {/* Domanda per la classe (Senza mostrare le opzioni per evitare suggerimenti) */}
+            <div className="p-8 bg-slate-950 rounded-3xl border border-slate-800/80 space-y-4 shadow-xl">
+              <span className="text-xs font-extrabold uppercase tracking-widest text-slate-400 block">
+                Domanda per la classe:
+              </span>
+              <h2 className="text-3xl md:text-4xl font-black text-white leading-tight">
+                {q.title}
+              </h2>
+
+              {q.imageUrl && (
+                <div className="max-h-64 rounded-2xl overflow-hidden border border-slate-800 inline-block bg-slate-900 mx-auto mt-2">
+                  <img src={q.imageUrl} alt="Domanda" className="max-h-64 w-auto object-contain mx-auto" />
+                </div>
+              )}
+
+              <p className="text-xs text-slate-500 italic pt-2">
+                (Le 4 opzioni di risposta sono mostrate esclusivamente sui dispositivi degli studenti per evitare suggerimenti).
+              </p>
+            </div>
+          </div>
+        );
+
+      case 'true_false':
+        return (
+          <div className="space-y-6">
+            <div className="flex flex-wrap items-center justify-between gap-3 pb-4 border-b border-slate-800">
+              <div className="inline-flex items-center gap-2 px-4 py-2 rounded-2xl bg-amber-500/20 border border-amber-500/40 text-amber-300 text-xs font-black uppercase tracking-wider shadow-sm">
+                <span className="text-base">⚖️</span> Tipo di Prova: Vero o Falso
+              </div>
+              <div className="text-xs text-slate-400">
+                Creata dallo studente: <strong className="text-amber-300 font-bold">{q.creatorName}</strong>
+              </div>
+            </div>
+
+            {/* Come Funziona */}
+            <div className="p-4 bg-slate-950/80 border border-amber-500/30 rounded-2xl text-left flex items-start gap-3">
+              <Info className="w-5 h-5 text-amber-400 shrink-0 mt-0.5" />
+              <div className="text-xs text-slate-300 space-y-1">
+                <p className="font-black text-white text-sm">Come funziona:</p>
+                <p className="leading-relaxed">
+                  Valuta attentamente l'affermazione proposta e indica sul tuo dispositivo se è VERA o FALSA prima che scada il tempo.
+                </p>
+              </div>
+            </div>
+
+            {/* Affermazione */}
+            <div className="p-8 bg-slate-950 rounded-3xl border border-slate-800/80 space-y-4 shadow-xl">
+              <span className="text-xs font-extrabold uppercase tracking-widest text-slate-400 block">
+                Affermazione da valutare:
+              </span>
+              <h2 className="text-3xl md:text-4xl font-black text-amber-200 leading-tight">
+                "{q.title}"
+              </h2>
+
+              {q.imageUrl && (
+                <div className="max-h-64 rounded-2xl overflow-hidden border border-slate-800 inline-block bg-slate-900 mx-auto mt-2">
+                  <img src={q.imageUrl} alt="Domanda" className="max-h-64 w-auto object-contain mx-auto" />
+                </div>
+              )}
+
+              <p className="text-xs text-slate-500 italic pt-2">
+                (I pulsanti VERO / FALSO sono attivi sui telefoni e tablet degli studenti).
+              </p>
+            </div>
+          </div>
+        );
+
+      case 'open_short':
+        return (
+          <div className="space-y-6">
+            <div className="flex flex-wrap items-center justify-between gap-3 pb-4 border-b border-slate-800">
+              <div className="inline-flex items-center gap-2 px-4 py-2 rounded-2xl bg-teal-500/20 border border-teal-500/40 text-teal-300 text-xs font-black uppercase tracking-wider shadow-sm">
+                <span className="text-base">✏️</span> Tipo di Prova: Risposta Breve
+              </div>
+              <div className="text-xs text-slate-400">
+                Creata dallo studente: <strong className="text-amber-300 font-bold">{q.creatorName}</strong>
+              </div>
+            </div>
+
+            {/* Come Funziona */}
+            <div className="p-4 bg-slate-950/80 border border-teal-500/30 rounded-2xl text-left flex items-start gap-3">
+              <Info className="w-5 h-5 text-teal-400 shrink-0 mt-0.5" />
+              <div className="text-xs text-slate-300 space-y-1">
+                <p className="font-black text-white text-sm">Come funziona:</p>
+                <p className="leading-relaxed">
+                  Digita la parola o il valore corretto nel campo di testo sul tuo smartphone/tablet e premi invio prima dello scadere del tempo.
+                </p>
+              </div>
+            </div>
+
+            {/* Quesito */}
+            <div className="p-8 bg-slate-950 rounded-3xl border border-slate-800/80 space-y-4 shadow-xl">
+              <span className="text-xs font-extrabold uppercase tracking-widest text-slate-400 block">
+                Quesito a risposta aperta:
+              </span>
+              <h2 className="text-3xl md:text-4xl font-black text-white leading-tight">
+                {q.title}
+              </h2>
+
+              {q.imageUrl && (
+                <div className="max-h-64 rounded-2xl overflow-hidden border border-slate-800 inline-block bg-slate-900 mx-auto mt-2">
+                  <img src={q.imageUrl} alt="Domanda" className="max-h-64 w-auto object-contain mx-auto" />
+                </div>
+              )}
+
+              <p className="text-xs text-slate-500 italic pt-2">
+                (La risposta attesa non viene rivelata sullo schermo per permettere a tutti di formulare la risposta).
+              </p>
+            </div>
+          </div>
+        );
+
+      case 'draw_vote': {
+        const promptText = ((q.content as DrawVoteContent)?.prompt || q.title || 'un disegno a tema').trim();
+        return (
+          <div className="space-y-6">
+            <div className="flex flex-wrap items-center justify-between gap-3 pb-4 border-b border-slate-800">
+              <div className="inline-flex items-center gap-2 px-4 py-2 rounded-2xl bg-pink-500/20 border border-pink-500/40 text-pink-300 text-xs font-black uppercase tracking-wider shadow-sm">
+                <span className="text-base">🎨</span> Tipo di Prova: Sfida di Disegno
+              </div>
+              <div className="text-xs text-slate-400">
+                Creata dallo studente: <strong className="text-amber-300 font-bold">{q.creatorName}</strong>
+              </div>
+            </div>
+
+            {/* Come Funziona */}
+            <div className="p-4 bg-slate-950/80 border border-pink-500/30 rounded-2xl text-left flex items-start gap-3">
+              <Info className="w-5 h-5 text-pink-400 shrink-0 mt-0.5" />
+              <div className="text-xs text-slate-300 space-y-1">
+                <p className="font-black text-white text-sm">Come funziona:</p>
+                <p className="leading-relaxed">
+                  Disegna sul tuo dispositivo prima che scada il tempo! Poi la classe visualizzerà la galleria dei disegni e voterà le creazioni più belle con le stelline.
+                </p>
+              </div>
+            </div>
+
+            {/* Banner Disegno Richiesto */}
+            <div className="p-8 bg-gradient-to-br from-slate-950 via-slate-900 to-pink-950/40 rounded-3xl border-2 border-pink-500/50 space-y-4 text-center shadow-2xl">
+              <span className="text-xs font-black uppercase tracking-widest text-pink-400 block">
+                Oggetto della sfida di disegno:
+              </span>
+              <h2 className="text-3xl md:text-5xl font-black text-pink-200 tracking-wide uppercase">
+                DEVI DISEGNARE: "{promptText}"
+              </h2>
+              <div className="inline-flex items-center gap-2 px-5 py-2.5 rounded-2xl bg-pink-500/25 border border-pink-500/40 text-pink-200 text-sm font-extrabold shadow-lg">
+                ✍️ USA IL TUO DISPOSITIVO E IL TUO DITO!
+              </div>
+              <p className="text-xs text-slate-400 max-w-lg mx-auto">
+                Tavolozza di colori, gomma e spessore pennello attivi sui telefoni degli studenti. Premi "Invia Disegno Definitivo" quando hai completato.
+              </p>
+            </div>
+          </div>
+        );
+      }
+
+      case 'mole_whack': {
+        const content = q.content as MoleWhackContent;
+        const category = content?.category || 'nomi';
+        const catMap: Record<string, string> = {
+          nomi: 'I NOMI',
+          aggettivi: 'GLI AGGETTIVI',
+          verbi: 'I VERBI',
+          articoli: 'GLI ARTICOLI'
+        };
+        const targetLabel = catMap[category] || category.toUpperCase();
+
+        return (
+          <div className="space-y-6">
+            <div className="flex flex-wrap items-center justify-between gap-3 pb-4 border-b border-slate-800">
+              <div className="inline-flex items-center gap-2 px-4 py-2 rounded-2xl bg-amber-500/20 border border-amber-500/40 text-amber-300 text-xs font-black uppercase tracking-wider shadow-sm">
+                <span className="text-base">🐹</span> Tipo di Prova: Colpisci la Talpa (Becca la Talpa)
+              </div>
+              <div className="text-xs text-slate-400">
+                Creata dallo studente: <strong className="text-amber-300 font-bold">{q.creatorName}</strong>
+              </div>
+            </div>
+
+            {/* Come Funziona */}
+            <div className="p-4 bg-slate-950/80 border border-amber-500/30 rounded-2xl text-left flex items-start gap-3">
+              <Info className="w-5 h-5 text-amber-400 shrink-0 mt-0.5" />
+              <div className="text-xs text-slate-300 space-y-1">
+                <p className="font-black text-white text-sm">Come funziona:</p>
+                <p className="leading-relaxed">
+                  Colpisci velocemente quante più talpe puoi prima dello scadere del tempo. Ma fai molta attenzione: colpisci SOLO le talpe con le parole appartenenti alla categoria indicata!
+                </p>
+              </div>
+            </div>
+
+            {/* Banner Obiettivo Talpe */}
+            <div className="p-8 bg-gradient-to-br from-slate-950 via-slate-900 to-amber-950/40 rounded-3xl border-2 border-amber-500/50 space-y-4 text-center shadow-2xl">
+              <h3 className="text-2xl md:text-3xl font-black text-amber-400 uppercase tracking-wide">
+                COLPISCI QUANTE PIÙ TALPE PUOI!
+              </h3>
+              <div className="p-5 bg-amber-500/20 border-2 border-amber-400 rounded-2xl inline-block max-w-xl mx-auto shadow-lg">
+                <span className="text-xs text-amber-300 uppercase font-black tracking-widest block mb-1">
+                  Obiettivo esclusivo della manche:
+                </span>
+                <span className="text-2xl md:text-4xl font-black text-amber-100 block">
+                  🎯 COLPISCI SOLO LE TALPE CON: {targetLabel}
+                </span>
+              </div>
+              <div className="text-xs font-bold text-rose-300 flex items-center justify-center gap-1.5">
+                <AlertTriangle className="w-4 h-4 text-rose-400" />
+                <span>Attenzione: se colpisci talpe con parole di altre categorie grammaticali perdi punti!</span>
+              </div>
+            </div>
+          </div>
+        );
+      }
+
+      case 'puzzle': {
+        return (
+          <div className="space-y-6">
+            <div className="flex flex-wrap items-center justify-between gap-3 pb-4 border-b border-slate-800">
+              <div className="inline-flex items-center gap-2 px-4 py-2 rounded-2xl bg-purple-500/20 border border-purple-500/40 text-purple-300 text-xs font-black uppercase tracking-wider shadow-sm">
+                <span className="text-base">🧩</span> Tipo di Prova: Puzzle Visivo
+              </div>
+              <div className="text-xs text-slate-400">
+                Creata dallo studente: <strong className="text-amber-300 font-bold">{q.creatorName}</strong>
+              </div>
+            </div>
+
+            {/* Come Funziona */}
+            <div className="p-4 bg-slate-950/80 border border-purple-500/30 rounded-2xl text-left flex items-start gap-3">
+              <Info className="w-5 h-5 text-purple-400 shrink-0 mt-0.5" />
+              <div className="text-xs text-slate-300 space-y-1">
+                <p className="font-black text-white text-sm">Come funziona:</p>
+                <p className="leading-relaxed">
+                  Ricomponi l'immagine sul tuo dispositivo spostando o toccando i tasselli per scambiarli finché il puzzle non è completo prima dello scadere del tempo.
+                </p>
+              </div>
+            </div>
+
+            {/* Banner Ricomponi l'Immagine */}
+            <div className="p-8 bg-slate-950 rounded-3xl border border-purple-500/40 space-y-4 text-center shadow-xl">
+              <span className="text-xs font-extrabold uppercase tracking-widest text-purple-400 block">
+                Obiettivo del puzzle:
+              </span>
+              <h2 className="text-3xl md:text-4xl font-black text-purple-200 uppercase">
+                RICOMPONI L'IMMAGINE: "{q.title.toUpperCase()}"
+              </h2>
+
+              {q.imageUrl && (
+                <div className="max-h-64 rounded-2xl overflow-hidden border-2 border-purple-500/40 inline-block bg-slate-900 shadow-xl mx-auto">
+                  <img src={q.imageUrl} alt="Anteprima puzzle" className="max-h-64 w-auto object-contain mx-auto" />
+                </div>
+              )}
+
+              <p className="text-xs text-slate-400">
+                (I tasselli sono mescolati sui dispositivi degli studenti. La foto sopra è l'obiettivo finale da ricomporre).
+              </p>
+            </div>
+          </div>
+        );
+      }
+
+      case 'word_builder': {
+        const content = q.content as WordBuilderContent;
+        const consonants = content?.consonants || ['R', 'S', 'T', 'M', 'P'];
+        const vowels = content?.vowels || ['A', 'E'];
+
+        return (
+          <div className="space-y-6">
+            <div className="flex flex-wrap items-center justify-between gap-3 pb-4 border-b border-slate-800">
+              <div className="inline-flex items-center gap-2 px-4 py-2 rounded-2xl bg-indigo-500/20 border border-indigo-500/40 text-indigo-300 text-xs font-black uppercase tracking-wider shadow-sm">
+                <span className="text-base">🔤</span> Tipo di Prova: Più Parole Possibili (Word Builder)
+              </div>
+              <div className="text-xs text-slate-400">
+                Creata dallo studente: <strong className="text-amber-300 font-bold">{q.creatorName}</strong>
+              </div>
+            </div>
+
+            {/* Come Funziona */}
+            <div className="p-4 bg-slate-950/80 border border-indigo-500/30 rounded-2xl text-left flex items-start gap-3">
+              <Info className="w-5 h-5 text-indigo-400 shrink-0 mt-0.5" />
+              <div className="text-xs text-slate-300 space-y-1">
+                <p className="font-black text-white text-sm">Come funziona:</p>
+                <p className="leading-relaxed">
+                  Componi quante più parole possibili prima dello scadere del tempo. Regola: <strong>1 lettera = 1 punto!</strong> Ogni parola deve essere una parola italiana valida (almeno 2 lettere con vocale).
+                </p>
+              </div>
+            </div>
+
+            {/* Lettere a disposizione */}
+            <div className="p-8 bg-slate-950 rounded-3xl border-2 border-indigo-500/40 space-y-5 text-center shadow-xl">
+              <span className="text-xs font-extrabold uppercase tracking-widest text-indigo-300 block">
+                Lettere a disposizione della classe:
+              </span>
+
+              <div className="flex flex-wrap gap-3 justify-center items-center">
+                <span className="text-xs text-slate-400 font-bold mr-1">5 Consonanti:</span>
+                {consonants.map((c, i) => (
+                  <span
+                    key={`wb-c-${i}`}
+                    className="w-12 h-14 rounded-2xl bg-indigo-600 font-black text-2xl text-white flex items-center justify-center shadow-lg"
+                  >
+                    {c}
+                  </span>
+                ))}
+                <span className="text-sm text-slate-600 font-bold mx-2">|</span>
+                <span className="text-xs text-slate-400 font-bold mr-1">2 Vocali:</span>
+                {vowels.map((v, i) => (
+                  <span
+                    key={`wb-v-${i}`}
+                    className="w-12 h-14 rounded-2xl bg-amber-500 font-black text-2xl text-slate-950 flex items-center justify-center shadow-lg"
+                  >
+                    {v}
+                  </span>
+                ))}
+              </div>
+
+              <p className="text-xs text-slate-400 max-w-lg mx-auto">
+                Le parole vengono verificate istantaneamente con il vocabolario della lingua italiana. Più parole trovi, maggiore sarà il tuo punteggio totale!
+              </p>
+            </div>
+          </div>
+        );
+      }
+
+      case 'longest_word': {
+        const content = q.content as LongestWordContent;
+        const consonants = content?.consonants || ['C', 'R', 'T', 'N', 'L', 'S', 'P', 'M', 'D', 'G'];
+        const vowels = content?.vowels || ['A', 'E', 'I', 'O'];
+
+        return (
+          <div className="space-y-6">
+            <div className="flex flex-wrap items-center justify-between gap-3 pb-4 border-b border-slate-800">
+              <div className="inline-flex items-center gap-2 px-4 py-2 rounded-2xl bg-fuchsia-500/20 border border-fuchsia-500/40 text-fuchsia-300 text-xs font-black uppercase tracking-wider shadow-sm">
+                <span className="text-base">🏆</span> Tipo di Prova: La Parola Più Lunga
+              </div>
+              <div className="text-xs text-slate-400">
+                Creata dallo studente: <strong className="text-amber-300 font-bold">{q.creatorName}</strong>
+              </div>
+            </div>
+
+            {/* Come Funziona */}
+            <div className="p-4 bg-slate-950/80 border border-fuchsia-500/30 rounded-2xl text-left flex items-start gap-3">
+              <Info className="w-5 h-5 text-fuchsia-400 shrink-0 mt-0.5" />
+              <div className="text-xs text-slate-300 space-y-1">
+                <p className="font-black text-white text-sm">Come funziona:</p>
+                <p className="leading-relaxed">
+                  Usa le 14 lettere a disposizione (10 consonanti + 4 vocali) per trovare la parola italiana valida più lunga possibile. Chi trova la parola più lunga vince un super bonus di <strong>+25 punti</strong>!
+                </p>
+              </div>
+            </div>
+
+            {/* 14 Lettere a disposizione */}
+            <div className="p-8 bg-slate-950 rounded-3xl border-2 border-fuchsia-500/40 space-y-5 text-center shadow-xl">
+              <span className="text-xs font-extrabold uppercase tracking-widest text-fuchsia-300 block">
+                14 Lettere a disposizione della classe:
+              </span>
+
+              <div className="flex flex-wrap gap-2.5 justify-center items-center">
+                {consonants.map((c, i) => (
+                  <span
+                    key={`lw-c-${i}`}
+                    className="w-10 h-12 rounded-xl bg-fuchsia-600 font-black text-xl text-white flex items-center justify-center shadow-md"
+                  >
+                    {c}
+                  </span>
+                ))}
+                <span className="text-sm text-slate-600 font-bold mx-1">|</span>
+                {vowels.map((v, i) => (
+                  <span
+                    key={`lw-v-${i}`}
+                    className="w-10 h-12 rounded-xl bg-amber-500 font-black text-xl text-slate-950 flex items-center justify-center shadow-md"
+                  >
+                    {v}
+                  </span>
+                ))}
+              </div>
+
+              <p className="text-xs text-slate-400 max-w-lg mx-auto">
+                Ogni parola inviata aggiorna il record personale dello studente. Vince il super bonus chi registra la parola più lunga della manche!
+              </p>
+            </div>
+          </div>
+        );
+      }
+
+      case 'fill_blanks': {
+        const content = q.content as FillBlanksContent;
+        let maskedText = content?.originalText || q.title;
+        if (content?.blanks && content.blanks.length > 0) {
+          for (const b of content.blanks) {
+            if (b.correctWord) {
+              const regex = new RegExp(`\\b${b.correctWord}\\b`, 'gi');
+              maskedText = maskedText.replace(regex, '[ __________ ]');
+            }
+          }
+        } else if (content?.blankWord) {
+          const regex = new RegExp(`\\b${content.blankWord}\\b`, 'gi');
+          maskedText = maskedText.replace(regex, '[ __________ ]');
+        }
+
+        return (
+          <div className="space-y-6">
+            <div className="flex flex-wrap items-center justify-between gap-3 pb-4 border-b border-slate-800">
+              <div className="inline-flex items-center gap-2 px-4 py-2 rounded-2xl bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 text-xs font-black uppercase tracking-wider shadow-sm">
+                <span className="text-base">📖</span> Tipo di Prova: Testo Bucato (Riempi gli Spazi)
+              </div>
+              <div className="text-xs text-slate-400">
+                Creata dallo studente: <strong className="text-amber-300 font-bold">{q.creatorName}</strong>
+              </div>
+            </div>
+
+            {/* Come Funziona */}
+            <div className="p-4 bg-slate-950/80 border border-emerald-500/30 rounded-2xl text-left flex items-start gap-3">
+              <Info className="w-5 h-5 text-emerald-400 shrink-0 mt-0.5" />
+              <div className="text-xs text-slate-300 space-y-1">
+                <p className="font-black text-white text-sm">Come funziona:</p>
+                <p className="leading-relaxed">
+                  Completa il testo selezionando le parole corrette per ciascuno spazio vuoto dal menù a tendina verticale sul tuo dispositivo prima che scada il tempo.
+                </p>
+              </div>
+            </div>
+
+            {/* Testo mascherato */}
+            <div className="p-8 bg-slate-950 rounded-3xl border border-emerald-500/30 space-y-4 text-center shadow-xl">
+              <span className="text-xs font-extrabold uppercase tracking-widest text-emerald-400 block">
+                Testo da completare:
+              </span>
+              <p className="text-2xl md:text-3xl font-black text-emerald-100 leading-relaxed font-serif">
+                "{maskedText}"
+              </p>
+              <p className="text-xs text-slate-500 italic pt-2">
+                (I suggerimenti e i menù a tendina sono attivi esclusivamente sui telefoni/tablet degli studenti).
+              </p>
+            </div>
+          </div>
+        );
+      }
+
+      case 'anagram': {
+        const content = q.content as AnagramContent;
+        const letterCount = content?.phraseOrWord?.trim().length || 0;
+        return (
+          <div className="space-y-6">
+            <div className="flex flex-wrap items-center justify-between gap-3 pb-4 border-b border-slate-800">
+              <div className="inline-flex items-center gap-2 px-4 py-2 rounded-2xl bg-sky-500/20 border border-sky-500/40 text-sky-300 text-xs font-black uppercase tracking-wider shadow-sm">
+                <span className="text-base">🔀</span> Tipo di Prova: Anagramma Segreto
+              </div>
+              <div className="text-xs text-slate-400">
+                Creata dallo studente: <strong className="text-amber-300 font-bold">{q.creatorName}</strong>
+              </div>
+            </div>
+
+            {/* Come Funziona */}
+            <div className="p-4 bg-slate-950/80 border border-sky-500/30 rounded-2xl text-left flex items-start gap-3">
+              <Info className="w-5 h-5 text-sky-400 shrink-0 mt-0.5" />
+              <div className="text-xs text-slate-300 space-y-1">
+                <p className="font-black text-white text-sm">Come funziona:</p>
+                <p className="leading-relaxed">
+                  Tocca le lettere mescolate sul tuo dispositivo per ricomporre la parola segreta in ordine esatto prima che scada il tempo.
+                </p>
+              </div>
+            </div>
+
+            {/* Indizio */}
+            <div className="p-8 bg-slate-950 rounded-3xl border border-sky-500/30 space-y-4 text-center shadow-xl">
+              <span className="text-xs font-extrabold uppercase tracking-widest text-sky-400 block">
+                Indizio per la parola segreta:
+              </span>
+              <h2 className="text-3xl md:text-4xl font-black text-white">
+                {q.title}
+              </h2>
+              <div className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-sky-500/20 text-sky-300 font-bold text-sm">
+                🔠 Parola segreta di {letterCount} lettere
+              </div>
+              {q.imageUrl && (
+                <div className="max-h-64 rounded-2xl overflow-hidden border border-slate-800 inline-block bg-slate-900 mx-auto mt-2">
+                  <img src={q.imageUrl} alt="Indizio" className="max-h-64 w-auto object-contain mx-auto" />
+                </div>
+              )}
+            </div>
+          </div>
+        );
+      }
+
+      case 'memory_match': {
+        const content = q.content as MemoryMatchContent;
+        const pairsCount = content?.pairs?.length || 4;
+        return (
+          <div className="space-y-6">
+            <div className="flex flex-wrap items-center justify-between gap-3 pb-4 border-b border-slate-800">
+              <div className="inline-flex items-center gap-2 px-4 py-2 rounded-2xl bg-purple-500/20 border border-purple-500/40 text-purple-300 text-xs font-black uppercase tracking-wider shadow-sm">
+                <span className="text-base">🃏</span> Tipo di Prova: Memory Match (Associazione)
+              </div>
+              <div className="text-xs text-slate-400">
+                Creata dallo studente: <strong className="text-amber-300 font-bold">{q.creatorName}</strong>
+              </div>
+            </div>
+
+            {/* Come Funziona */}
+            <div className="p-4 bg-slate-950/80 border border-purple-500/30 rounded-2xl text-left flex items-start gap-3">
+              <Info className="w-5 h-5 text-purple-400 shrink-0 mt-0.5" />
+              <div className="text-xs text-slate-300 space-y-1">
+                <p className="font-black text-white text-sm">Come funziona:</p>
+                <p className="leading-relaxed">
+                  Tocca le carte coperte sul tuo dispositivo per trovare e abbinare tutte le coppie corrispondenti prima dello scadere del tempo.
+                </p>
+              </div>
+            </div>
+
+            {/* Titolo associazione */}
+            <div className="p-8 bg-slate-950 rounded-3xl border border-purple-500/30 space-y-4 text-center shadow-xl">
+              <h2 className="text-3xl md:text-4xl font-black text-white">
+                {q.title}
+              </h2>
+              <div className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-purple-500/20 text-purple-300 font-bold text-sm">
+                🎴 Trova le {pairsCount} coppie corrispondenti
+              </div>
+            </div>
+          </div>
+        );
+      }
+
+      default:
+        return (
+          <div className="space-y-6">
+            <div className="flex flex-wrap items-center justify-between gap-3 pb-4 border-b border-slate-800">
+              <div className="inline-flex items-center gap-2 px-4 py-2 rounded-2xl bg-indigo-500/20 border border-indigo-500/40 text-indigo-300 text-xs font-black uppercase tracking-wider capitalize shadow-sm">
+                <span className="text-base">⚡</span> Tipo di Prova: {q.type.replace('_', ' ')}
+              </div>
+              <div className="text-xs text-slate-400">
+                Creata dallo studente: <strong className="text-amber-300 font-bold">{q.creatorName}</strong>
+              </div>
+            </div>
+
+            <div className="p-8 bg-slate-950 rounded-3xl border border-slate-800 space-y-4 text-center shadow-xl">
+              <h2 className="text-3xl md:text-4xl font-black text-white leading-tight">
+                {q.title}
+              </h2>
+              {q.imageUrl && (
+                <div className="max-h-64 rounded-2xl overflow-hidden border border-slate-800 inline-block bg-slate-900 mx-auto mt-2">
+                  <img src={q.imageUrl} alt="Domanda" className="max-h-64 w-auto object-contain mx-auto" />
+                </div>
+              )}
+            </div>
+          </div>
+        );
+    }
   };
 
   const isGameRunning =
@@ -628,21 +1207,9 @@ export const TeacherMonitor: React.FC<TeacherMonitorProps> = ({
               </div>
             </div>
 
-            {/* Giant Question Display */}
-            <div className="w-full bg-slate-900 border-2 border-slate-700/80 p-8 rounded-3xl shadow-2xl text-center space-y-6">
-              <h2 className="text-3xl md:text-4xl font-black text-white leading-tight">
-                {currentQ.title}
-              </h2>
-
-              {currentQ.imageUrl && (
-                <div className="max-h-72 rounded-2xl overflow-hidden border border-slate-800 inline-block bg-slate-950">
-                  <img
-                    src={currentQ.imageUrl}
-                    alt="Domanda"
-                    className="max-h-72 w-auto object-contain mx-auto"
-                  />
-                </div>
-              )}
+            {/* Pedagogical Activity Card with Explanation, Type, and Non-Spoiler Challenge Display */}
+            <div className="w-full bg-slate-900/95 border-2 border-slate-700/80 p-6 md:p-8 rounded-3xl shadow-2xl">
+              {renderActiveQuestionBoard(currentQ)}
             </div>
 
             {/* Live student response indicators */}

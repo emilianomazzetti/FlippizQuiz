@@ -246,77 +246,140 @@ export function canFormWord(word: string, availableLetters: string[]): boolean {
   return true;
 }
 
+// Elenco autoritativo e rigoroso delle parole italiane valide di sole 2 lettere (articoli, preposizioni, pronomi, congiunzioni, note musicali)
+export const VALID_2_LETTER_WORDS = new Set([
+  'ma', 'se', 're', 'me', 'te', 'di', 'da', 'in', 'su', 'il', 'lo', 'la', 'le', 'un',
+  'io', 'tu', 'ci', 'vi', 'ne', 'mi', 'ti', 'si', 'li', 'no', 'fa', 'va', 'ha', 'ho',
+  'fu', 'sa', 'so', 'do', 'ai', 'al', 'eh', 'ah', 'oh', 'uh'
+]);
+
+// Parole italiane comuni di 3 e 4 lettere spesso composte nei giochi di lettere
+export const COMMON_SHORT_WORDS = new Set([
+  'tra', 'fra', 'per', 'con', 'qui', 'qua', 'non', 'piu', 'ora', 'poi', 'gia', 'via',
+  'mio', 'tuo', 'suo', 'mia', 'tua', 'sua', 'cui', 'chi', 'che', 'sei', 'era', 'ero',
+  'eri', 'fai', 'dai', 'vai', 'sto', 'sai', 'uso', 'usi', 'usa', 'amo', 'ami', 'ama',
+  'oro', 'ora', 'ore', 'eco', 'ali', 'ala', 'ago', 'api', 'ape', 'oca', 'oco', 'uva',
+  'bus', 'bar', 'gas', 'gol', 'set', 'fan', 'top', 'web', 'sci', 'sud', 'est',
+  'ramo', 'rami', 'remo', 'remi', 'muro', 'muri', 'mare', 'mari', 'mela', 'mele',
+  'pera', 'pere', 'sera', 'sere', 'seta', 'sete', 'pane', 'pani', 'vino', 'vini',
+  'riso', 'risi', 'pesa', 'peso', 'pesi', 'pese', 'posa', 'pose', 'tana', 'tane',
+  'tema', 'temi', 'tavolo', 'tono', 'toni', 'arte', 'arti', 'arco', 'arci', 'arco',
+  'arma', 'armi', 'arme', 'asta', 'aste', 'alto', 'alta', 'alti', 'alte', 'aria',
+  'bene', 'casa', 'case', 'cena', 'cene', 'cima', 'cime', 'capo', 'capi', 'cura',
+  'dito', 'dita', 'dono', 'doni', 'faro', 'fari', 'fata', 'fate', 'foto', 'fumo',
+  'lago', 'laghi', 'luna', 'lune', 'luce', 'luci', 'mano', 'mani', 'moto', 'nave',
+  'naso', 'nasi', 'nota', 'note', 'onda', 'onde', 'pace', 'pelo', 'peli', 'pino',
+  'pila', 'pile', 'piuma', 'piume', 'roba', 'robe', 'rosa', 'rose', 'roccia', 'sala',
+  'sale', 'sali', 'seta', 'sito', 'siti', 'sole', 'soli', 'spia', 'spie', 'tasto',
+  'tasti', 'tela', 'tele', 'topo', 'topi', 'tram', 'tubo', 'tubi', 'voce', 'voci',
+  'vita', 'vite', 'volo', 'voli', 'vaso', 'vasi', 'zero', 'zona', 'zone', 'zuppa',
+  'stampa', 'stampe', 'pasta', 'paste', 'pasto', 'pasti', 'resto', 'resti', 'resta',
+  'poste', 'posto', 'posti', 'posta', 'tempo', 'tempi', 'trama', 'trame', 'massa',
+  'pesta', 'peste', 'pesti', 'pesto', 'presta', 'presto', 'spesa', 'spese', 'spera'
+]);
+
+// Cache per parole scartate (evita chiamate di rete ripetute per parole inesistenti come TS, ST, ecc.)
+const REJECTED_WORDS_CACHE = new Set<string>();
+
 /**
  * Controllo istantaneo offline nel dizionario locale e nella cache delle parole verificate.
  */
 export function isValidItalianWord(word: string): boolean {
   const norm = word.trim().toLowerCase();
   if (!norm || norm.length < 2) return false;
-  return ITALIAN_WORD_LIST.has(norm) || VERIFIED_WORDS_CACHE.has(norm);
+
+  // Regola 1: fonetica e grammatica italiana: ogni parola italiana deve contenere almeno una vocale!
+  // Elimina istantaneamente combinazioni non-parole come TS, ST, TR, PR, ecc.
+  if (!/[aeiouàèéìòù]/i.test(norm)) {
+    REJECTED_WORDS_CACHE.add(norm);
+    return false;
+  }
+
+  // Regola 2: parole di 2 lettere - ammesse solo le autentiche parole italiane di 2 lettere
+  // (esclude categoricamente TS, AS, PS, MS, RS, ecc.)
+  if (norm.length === 2) {
+    const is2 = VALID_2_LETTER_WORDS.has(norm);
+    if (!is2) REJECTED_WORDS_CACHE.add(norm);
+    return is2;
+  }
+
+  if (REJECTED_WORDS_CACHE.has(norm)) return false;
+
+  return (
+    ITALIAN_WORD_LIST.has(norm) ||
+    COMMON_SHORT_WORDS.has(norm) ||
+    VERIFIED_WORDS_CACHE.has(norm)
+  );
 }
 
 /**
- * Verifica asincrona di una parola italiana tramite servizio online gratuito (Wiktionary API / Free Dictionary)
+ * Verifica asincrona di una parola italiana tramite servizio online (Wiktionary API con controllo categorie/sezioni in lingua italiana)
  * con memorizzazione automatica nella cache locale.
  */
 export async function verifyItalianWordOnline(word: string): Promise<boolean> {
   const norm = word.trim().toLowerCase();
   if (!norm || norm.length < 2) return false;
 
-  // 1. Check local list & cache first (instant)
-  if (ITALIAN_WORD_LIST.has(norm) || VERIFIED_WORDS_CACHE.has(norm)) {
+  // 1. Controllo vocali: nessuna parola italiana è priva di vocali (elimina istantaneamente TS, ST, TR, ecc.)
+  if (!/[aeiouàèéìòù]/i.test(norm)) {
+    REJECTED_WORDS_CACHE.add(norm);
+    return false;
+  }
+
+  // 2. Controllo parole di 2 lettere: solo parole di 2 lettere lecite in italiano
+  if (norm.length === 2) {
+    const is2Valid = VALID_2_LETTER_WORDS.has(norm);
+    if (!is2Valid) REJECTED_WORDS_CACHE.add(norm);
+    return is2Valid;
+  }
+
+  // 3. Controllo cache locale e dizionari precaricati (istantaneo)
+  if (REJECTED_WORDS_CACHE.has(norm)) return false;
+  if (ITALIAN_WORD_LIST.has(norm) || COMMON_SHORT_WORDS.has(norm) || VERIFIED_WORDS_CACHE.has(norm)) {
     return true;
   }
 
-  // 2. Query Italian Wiktionary open API (supports all Italian conjugations, lemmas, nouns, plurals)
+  // 4. Query a Wiktionary con verifica rigorosa della presenza della sezione o categoria 'Italiano'
+  // ed esclusione di mere sigle, codici o abbreviazioni
   try {
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 2500);
+    const timeout = setTimeout(() => controller.abort(), 3000);
 
     const res = await fetch(
-      `https://it.wiktionary.org/w/api.php?action=query&titles=${encodeURIComponent(norm)}&format=json&origin=*`,
+      `https://it.wiktionary.org/w/api.php?action=parse&page=${encodeURIComponent(norm)}&prop=categories|sections&format=json&origin=*`,
       { signal: controller.signal }
     );
     clearTimeout(timeout);
 
     if (res.ok) {
       const data = await res.json();
-      const pages = data?.query?.pages;
-      if (pages && typeof pages === 'object') {
-        const pageId = Object.keys(pages)[0];
-        // If pageId is not '-1' and doesn't have missing flag, it's a valid Italian entry!
-        if (pageId && pageId !== '-1' && !pages[pageId].missing) {
+      if (data && data.parse) {
+        const sections: string[] = (data.parse.sections || []).map((s: any) => String(s.line || '').toLowerCase());
+        const categories: string[] = (data.parse.categories || []).map((c: any) => String(c['*'] || '').toLowerCase());
+
+        // Deve appartenere alla sezione italiano o categorie in italiano
+        const hasItalianSection = sections.some((s) => s.includes('italiano'));
+        const hasItalianCategory = categories.some((c) => c.includes('italiano') || c.endsWith('-it'));
+
+        // Verifica che non sia solo una sigla, abbreviazione o codice
+        const isPureAbbreviation =
+          categories.some((c) => c.includes('sigle') || c.includes('abbreviazioni') || c.includes('lettere_in_lingua')) &&
+          !categories.some((c) => c.includes('sostantivi') || c.includes('verbi') || c.includes('aggettivi') || c.includes('avverbi') || c.includes('forme_verbali'));
+
+        if ((hasItalianSection || hasItalianCategory) && !isPureAbbreviation) {
           VERIFIED_WORDS_CACHE.add(norm);
           return true;
+        } else {
+          REJECTED_WORDS_CACHE.add(norm);
+          return false;
         }
       }
     }
   } catch (e) {
-    // Timeout or network error; fall through to secondary check
+    // Timeout o errore di rete
   }
 
-  // 3. Fallback: Free Dictionary API
-  try {
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 2000);
-
-    const res = await fetch(
-      `https://api.dictionaryapi.dev/api/v2/entries/it/${encodeURIComponent(norm)}`,
-      { signal: controller.signal }
-    );
-    clearTimeout(timeout);
-
-    if (res.ok) {
-      const data = await res.json();
-      if (Array.isArray(data) && data.length > 0) {
-        VERIFIED_WORDS_CACHE.add(norm);
-        return true;
-      }
-    }
-  } catch (e) {
-    // Network note
-  }
-
+  REJECTED_WORDS_CACHE.add(norm);
   return false;
 }
 

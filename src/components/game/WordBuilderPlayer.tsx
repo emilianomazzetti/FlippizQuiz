@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { WordBuilderContent } from '../../types/quiz';
-import { canFormWord, isValidItalianWord, verifyItalianWordOnline } from '../../utils/wordDictionary';
-import { Plus, Check, AlertCircle } from 'lucide-react';
+import { canFormWord, isValidItalianWord, verifyItalianWordOnline, VALID_2_LETTER_WORDS } from '../../utils/wordDictionary';
+import { Plus, Check, AlertCircle, Loader2 } from 'lucide-react';
 import { sound } from '../../utils/audio';
 
 interface WordBuilderPlayerProps {
@@ -47,7 +47,19 @@ export const WordBuilderPlayer: React.FC<WordBuilderPlayerProps> = ({
       return;
     }
 
-    // Rule 4: Valid Italian dictionary check (instant offline set + online verification fallback)
+    // Rule 4: Mandatory vowel check (Italian phonetics: every Italian word MUST contain at least one vowel)
+    if (!/[AEIOUÀÈÉÌÒÙ]/i.test(word)) {
+      setErrorMessage(`"${word}" non contiene alcuna vocale. In italiano tutte le parole devono avere almeno una vocale!`);
+      return;
+    }
+
+    // Rule 5: If 2 letters, must be an authentic Italian 2-letter word
+    if (word.length === 2 && !VALID_2_LETTER_WORDS.has(word.toLowerCase())) {
+      setErrorMessage(`"${word}" non è una parola italiana valida di 2 lettere.`);
+      return;
+    }
+
+    // Rule 6: Valid Italian dictionary check (instant offline set + online verification fallback)
     setIsValidating(true);
     let isValid = isValidItalianWord(word);
     if (!isValid) {
@@ -56,7 +68,7 @@ export const WordBuilderPlayer: React.FC<WordBuilderPlayerProps> = ({
     setIsValidating(false);
 
     if (!isValid) {
-      setErrorMessage(`"${word}" non è stata trovata nel vocabolario italiano.`);
+      setErrorMessage(`"${word}" non è stata trovata nel vocabolario della lingua italiana.`);
       return;
     }
 
@@ -143,11 +155,20 @@ export const WordBuilderPlayer: React.FC<WordBuilderPlayerProps> = ({
           />
           <button
             type="submit"
-            disabled={disabled || !currentInput.trim()}
+            disabled={disabled || !currentInput.trim() || isValidating}
             className="px-6 py-3.5 rounded-2xl bg-emerald-600 hover:bg-emerald-500 disabled:opacity-40 text-white font-bold flex items-center gap-2 shadow-lg transition-colors cursor-pointer"
           >
-            <Plus className="w-5 h-5" />
-            Aggiungi
+            {isValidating ? (
+              <>
+                <Loader2 className="w-5 h-5 animate-spin" />
+                Verifica...
+              </>
+            ) : (
+              <>
+                <Plus className="w-5 h-5" />
+                Aggiungi
+              </>
+            )}
           </button>
         </div>
 
