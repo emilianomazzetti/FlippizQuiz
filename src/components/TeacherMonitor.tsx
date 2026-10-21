@@ -97,32 +97,47 @@ export const TeacherMonitor: React.FC<TeacherMonitorProps> = ({
     }
   }, [roomState.phase]);
 
+  const qTimeLimit = currentQ?.timeLimit || 25;
+  const turnStartTime = roomState.turnStartTime;
+
+  // Authoritative remaining time calculation: never resets on answer submit or re-renders
+  const calculateRemainingSeconds = () => {
+    if (turnStartTime) {
+      const elapsed = Math.floor((Date.now() - turnStartTime) / 1000);
+      return Math.max(0, qTimeLimit - elapsed);
+    }
+    return qTimeLimit;
+  };
+
   // Active countdown timer with ticking sound on teacher screen during question_active
   useEffect(() => {
     if (roomState.phase !== 'question_active' || !currentQ) return;
 
-    setTimeRemaining(currentQ.timeLimit || 25);
-    const interval = setInterval(() => {
-      setTimeRemaining((prev) => {
-        if (prev <= 1) {
-          clearInterval(interval);
-          onEndQuestionTimerNow();
-          return 0;
-        }
+    setTimeRemaining(calculateRemainingSeconds());
+    let lastTicked = -1;
 
-        if (soundEnabled) {
-          if (prev <= 5 && prev > 1) {
-            sound.playUrgentTick();
-          } else {
-            sound.playTick();
-          }
+    const interval = setInterval(() => {
+      const rem = calculateRemainingSeconds();
+      setTimeRemaining(rem);
+
+      if (rem <= 0) {
+        clearInterval(interval);
+        onEndQuestionTimerNow();
+        return;
+      }
+
+      if (soundEnabled && rem !== lastTicked) {
+        lastTicked = rem;
+        if (rem <= 5) {
+          sound.playUrgentTick();
+        } else {
+          sound.playTick();
         }
-        return prev - 1;
-      });
-    }, 1000);
+      }
+    }, 500);
 
     return () => clearInterval(interval);
-  }, [roomState.phase, roomState.currentQuestionIndex, currentQ, soundEnabled]);
+  }, [roomState.phase, roomState.currentQuestionIndex, turnStartTime, qTimeLimit, soundEnabled]);
 
   // Auto terminate question timer when ALL connected players have answered for this turn
   useEffect(() => {

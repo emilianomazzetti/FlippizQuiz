@@ -57,7 +57,6 @@ export const StudentDevice: React.FC<StudentDeviceProps> = ({
   const [pin, setPin] = useState(initialPin || roomState.roomCode);
   const [activeTab, setActiveTab] = useState<'play' | 'create'>('create');
   const [hasCreatedQuestion, setHasCreatedQuestion] = useState(false);
-  const [timeRemaining, setTimeRemaining] = useState<number>(25);
 
   useEffect(() => {
     if (initialPin) setPin(initialPin);
@@ -84,23 +83,35 @@ export const StudentDevice: React.FC<StudentDeviceProps> = ({
   const isMyOwnQuestion =
     currentQ && activePlayer && currentQ.creatorName === activePlayer.name;
 
-  // Countdown timer when question is active (silent on student device)
+  const qTimeLimit = currentQ?.timeLimit || 25;
+  const turnStartTime = roomState.turnStartTime;
+
+  // Authoritative remaining time calculation: never resets on answer submit or re-renders
+  const calculateRemainingSeconds = () => {
+    if (turnStartTime) {
+      const elapsed = Math.floor((Date.now() - turnStartTime) / 1000);
+      return Math.max(0, qTimeLimit - elapsed);
+    }
+    return qTimeLimit;
+  };
+
+  const [timeRemaining, setTimeRemaining] = useState<number>(calculateRemainingSeconds);
+
+  // Synchronized countdown timer when question is active
   useEffect(() => {
     if (roomState.phase !== 'question_active' || !currentQ) return;
 
-    setTimeRemaining(currentQ.timeLimit);
+    setTimeRemaining(calculateRemainingSeconds());
     const interval = setInterval(() => {
-      setTimeRemaining((prev) => {
-        if (prev <= 1) {
-          clearInterval(interval);
-          return 0;
-        }
-        return prev - 1;
-      });
-    }, 1000);
+      const rem = calculateRemainingSeconds();
+      setTimeRemaining(rem);
+      if (rem <= 0) {
+        clearInterval(interval);
+      }
+    }, 500);
 
     return () => clearInterval(interval);
-  }, [roomState.phase, roomState.currentQuestionIndex, currentQ]);
+  }, [roomState.phase, roomState.currentQuestionIndex, turnStartTime, qTimeLimit]);
 
   // Audio & confetti on result
   useEffect(() => {
@@ -389,7 +400,7 @@ export const StudentDevice: React.FC<StudentDeviceProps> = ({
                 <QuestionRenderer
                   question={currentQ}
                   onAnswer={onSubmitAnswer}
-                  disabled={isContinuousGame ? timeRemaining <= 0 : myAnswer !== null}
+                  disabled={isContinuousGame ? (timeRemaining <= 0 && (!roomState.turnStartTime || Date.now() - roomState.turnStartTime > 2000)) : myAnswer !== null}
                   myPlayerId={activePlayer.id}
                   drawings={roomState.drawingsThisTurn || {}}
                   isGalleryMode={false}

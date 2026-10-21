@@ -51,7 +51,13 @@ export const DrawVotePlayer: React.FC<DrawVotePlayerProps> = ({
           </p>
         </div>
 
-        <DrawingCanvas onSaveDrawing={onSaveDrawing} disabled={disabled} height={340} />
+        <DrawingCanvas
+          onSaveDrawing={onSaveDrawing}
+          disabled={disabled}
+          initialData={drawings[myPlayerId]?.dataUrl}
+          initialConfirmed={!!drawings[myPlayerId]}
+          height={340}
+        />
       </div>
     );
   }
