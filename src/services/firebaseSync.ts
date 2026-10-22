@@ -1,4 +1,4 @@
-import { ref, onValue, set, get, update } from 'firebase/database';
+import { ref, onValue, set, get, update, onDisconnect, remove } from 'firebase/database';
 import { signInAnonymously, onAuthStateChanged } from 'firebase/auth';
 import { doc, onSnapshot, setDoc, getDoc } from 'firebase/firestore';
 import { rtdb, db, auth } from './firebase';
@@ -302,10 +302,29 @@ export const firebaseSync = {
     try {
       const playerRef = ref(rtdb, `rooms/${cleanCode}/players/${player.id}`);
       await set(playerRef, cleanPayload(player));
+      try {
+        // Automatically remove player when tab is closed / connection lost
+        onDisconnect(playerRef).remove();
+      } catch (discErr) {
+        console.warn('onDisconnect hook note:', discErr);
+      }
       notifyConnectionChange(true);
       return true;
     } catch (e) {
       console.warn('joinPlayer error:', e);
+      return false;
+    }
+  },
+
+  // Student leaves or closes browser explicitly
+  async removePlayer(roomCode: string, playerId: string): Promise<boolean> {
+    const cleanCode = roomCode.replace(/[^a-zA-Z0-9_-]/g, '');
+    try {
+      const playerRef = ref(rtdb, `rooms/${cleanCode}/players/${playerId}`);
+      await remove(playerRef);
+      return true;
+    } catch (e) {
+      console.warn('removePlayer error:', e);
       return false;
     }
   },

@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { LongestWordContent } from '../../types/quiz';
 import { canFormWord, isValidItalianWord, verifyItalianWordOnline } from '../../utils/wordDictionary';
 import { sound } from '../../utils/audio';
-import { Trophy, Check, AlertCircle, Sparkles, Send, Award, Loader2 } from 'lucide-react';
+import { Trophy, Check, AlertCircle, Sparkles, Send, Award, Loader2, Delete } from 'lucide-react';
 import confetti from 'canvas-confetti';
 
 interface LongestWordPlayerProps {
@@ -136,7 +136,7 @@ export const LongestWordPlayer: React.FC<LongestWordPlayerProps> = ({
           <span className="text-[11px] font-bold text-amber-400 uppercase tracking-wider block mb-1.5">
             4 Vocali:
           </span>
-          <div className="flex flex-wrap gap-2 justify-center">
+          <div className="flex flex-wrap gap-2 justify-center items-center">
             {vowels.map((v, i) => (
               <button
                 key={`v-${i}`}
@@ -148,6 +148,19 @@ export const LongestWordPlayer: React.FC<LongestWordPlayerProps> = ({
                 {v}
               </button>
             ))}
+            <button
+              type="button"
+              disabled={disabled || !currentInput}
+              onClick={() => {
+                setCurrentInput((prev) => prev.slice(0, -1));
+                setErrorMessage(null);
+              }}
+              className="px-3.5 h-11 md:h-14 rounded-2xl font-bold text-xs bg-rose-900/80 hover:bg-rose-800 active:scale-95 text-rose-200 border border-rose-600/50 shadow-md transition-all flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+              title="Cancella ultima lettera"
+            >
+              <Delete className="w-4 h-4" />
+              CANCELLA
+            </button>
           </div>
         </div>
 

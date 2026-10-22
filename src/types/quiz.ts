@@ -91,7 +91,7 @@ export interface AnagramContent {
 
 export interface PuzzleContent {
   imageUrl: string;
-  gridSize: 2 | 3; // 2x2 or 3x3
+  gridSize: 2 | 3 | 4 | 5; // 2x2, 3x3, 4x4, 5x5
 }
 
 export interface WordSearchContent {

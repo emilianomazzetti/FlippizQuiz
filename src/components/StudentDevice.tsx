@@ -21,7 +21,8 @@ import {
   Send,
   Zap,
   Star,
-  Award
+  Award,
+  AlertCircle
 } from 'lucide-react';
 
 interface StudentDeviceProps {
@@ -140,11 +141,21 @@ export const StudentDevice: React.FC<StudentDeviceProps> = ({
       )
     : undefined;
   const hasActiveQuestion = !!myCreatedQuestion;
+  const [questionWasDeletedNotice, setQuestionWasDeletedNotice] = useState(false);
+  const prevHadQuestionRef = React.useRef(hasActiveQuestion);
 
   // Manage lobby tab:
   // - If student already has a question in repository: stay in 'play' ("Stato Attesa Quiz")
   // - If no question (or teacher deleted it): stay in 'create' ("Crea una Domanda")
   useEffect(() => {
+    if (prevHadQuestionRef.current && !hasActiveQuestion) {
+      // Question was removed by teacher! Immediately reset state and return to create
+      setHasCreatedQuestion(false);
+      setQuestionWasDeletedNotice(true);
+      setActiveTab('create');
+    }
+    prevHadQuestionRef.current = hasActiveQuestion;
+
     if (roomState.phase === 'lobby') {
       if (hasActiveQuestion) {
         setActiveTab('play');
@@ -178,6 +189,7 @@ export const StudentDevice: React.FC<StudentDeviceProps> = ({
     if (hasActiveQuestion) return; // Only 1 question allowed per student
     onSubmitQuestion(q);
     setHasCreatedQuestion(true);
+    setQuestionWasDeletedNotice(false);
     setActiveTab('play'); // Immediately navigate to "Stato Attesa Quiz"
   };
 
@@ -356,10 +368,20 @@ export const StudentDevice: React.FC<StudentDeviceProps> = ({
 
       {/* TAB: CREATE QUESTION */}
       {roomState.phase === 'lobby' && activeTab === 'create' && !hasActiveQuestion && (
-        <QuestionCreator
-          creatorName={activePlayer.name}
-          onSubmitQuestion={handleCreatedQuestion}
-        />
+        <div className="space-y-4">
+          {questionWasDeletedNotice && (
+            <div className="p-4 bg-amber-500/20 border-2 border-amber-500/50 rounded-2xl text-amber-200 text-xs font-bold flex items-center gap-3 animate-fade-in shadow-lg">
+              <AlertCircle className="w-5 h-5 text-amber-400 shrink-0" />
+              <span>
+                La tua domanda precedente è stata rimossa dal docente dal repository. Puoi ora formularne e inviarne una nuova!
+              </span>
+            </div>
+          )}
+          <QuestionCreator
+            creatorName={activePlayer.name}
+            onSubmitQuestion={handleCreatedQuestion}
+          />
+        </div>
       )}
 
       {/* TAB: WAITING IN LOBBY */}

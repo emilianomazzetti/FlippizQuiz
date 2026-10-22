@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { WordBuilderContent } from '../../types/quiz';
 import { canFormWord, isValidItalianWord, verifyItalianWordOnline, VALID_2_LETTER_WORDS } from '../../utils/wordDictionary';
-import { Plus, Check, AlertCircle, Loader2 } from 'lucide-react';
+import { Plus, Check, AlertCircle, Loader2, Delete } from 'lucide-react';
 import { sound } from '../../utils/audio';
 
 interface WordBuilderPlayerProps {
@@ -132,6 +132,23 @@ export const WordBuilderPlayer: React.FC<WordBuilderPlayerProps> = ({
               {v}
             </button>
           ))}
+
+          <div className="w-1 bg-slate-700 mx-1 rounded-full self-stretch" />
+
+          {/* Pulsante CANCELLA rapido */}
+          <button
+            type="button"
+            disabled={disabled || !currentInput}
+            onClick={() => {
+              setCurrentInput((prev) => prev.slice(0, -1));
+              setErrorMessage(null);
+            }}
+            className="px-4 h-14 md:h-16 rounded-2xl font-black text-xs md:text-sm bg-rose-600 hover:bg-rose-500 active:scale-95 text-white shadow-lg transition-all flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-40"
+            title="Cancella l'ultima lettera"
+          >
+            <Delete className="w-4 h-4" />
+            <span>CANCELLA</span>
+          </button>
         </div>
         <p className="text-xs text-slate-400">
           Componi quante più parole possibili prima dello scadere del tempo. <strong>Regola: 1 lettera = 1 punto!</strong>

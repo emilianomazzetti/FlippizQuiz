@@ -221,6 +221,24 @@ export default function App() {
     };
   }, []);
 
+  // Listen for student closing tab / browser to remove them from active players
+  useEffect(() => {
+    if (!myPlayerId || !roomState.roomCode) return;
+
+    const handleDisconnect = () => {
+      firebaseSync.removePlayer(roomState.roomCode, myPlayerId);
+      api.leave(myPlayerId);
+    };
+
+    window.addEventListener('beforeunload', handleDisconnect);
+    window.addEventListener('pagehide', handleDisconnect);
+
+    return () => {
+      window.removeEventListener('beforeunload', handleDisconnect);
+      window.removeEventListener('pagehide', handleDisconnect);
+    };
+  }, [myPlayerId, roomState.roomCode]);
+
   // Keep myPlayer score and streak in sync with roomState.players
   const activeStudent: Player | null =
     myPlayer && roomState.players && roomState.players[myPlayer.id]
@@ -657,14 +675,29 @@ export default function App() {
     const duration = roomState.questions[0]?.timeLimit || 25;
 
     setRoomState((prev) => {
+      // Reset all students' score and streak to 0 on new quiz!
+      const resetPlayers = Object.fromEntries(
+        Object.entries(prev.players || {}).map(([id, p]) => [
+          id,
+          {
+            ...p,
+            score: 0,
+            streak: 0
+          }
+        ])
+      );
+
       const updated: RoomState = {
         ...prev,
+        players: resetPlayers,
         phase: 'question_intro',
         currentQuestionIndex: 0,
         answersThisTurn: {},
+        drawingsThisTurn: {},
         turnStartTime: Date.now()
       };
       api.broadcastLocal(updated);
+      firebaseSync.pushRoomState(updated);
       return updated;
     });
 
@@ -998,24 +1031,42 @@ export default function App() {
 
           {/* Firebase Connection & Guide Buttons */}
           <div className="flex items-center gap-2">
-            <button
-              onClick={() => setIsFirebaseModalOpen(true)}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold shadow-sm transition-colors cursor-pointer border ${
-                isFirebaseOnline
-                  ? 'bg-emerald-500/15 hover:bg-emerald-500/25 border-emerald-500/40 text-emerald-300'
-                  : 'bg-amber-500/15 hover:bg-amber-500/25 border-amber-500/30 text-amber-300'
-              }`}
-              title="Stato del database Firebase (gioco-multi-utente). Clicca per verificare la connessione"
-            >
-              <span
-                className={`w-2 h-2 rounded-full ${
-                  isFirebaseOnline ? 'bg-emerald-400 animate-pulse' : 'bg-amber-400'
+            {viewRole === 'teacher' ? (
+              <div
+                className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-bold border select-none cursor-default ${
+                  isFirebaseOnline
+                    ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400'
+                    : 'bg-amber-500/10 border-amber-500/30 text-amber-400'
                 }`}
-              />
-              <span>
-                {isFirebaseOnline ? 'Firebase RTDB: Online' : 'Firebase RTDB: Connessione...'}
-              </span>
-            </button>
+                title={isFirebaseOnline ? 'Firebase RTDB: Connesso' : 'Firebase RTDB: Connessione in corso...'}
+              >
+                <span
+                  className={`w-2 h-2 rounded-full ${
+                    isFirebaseOnline ? 'bg-emerald-400 animate-pulse' : 'bg-amber-400'
+                  }`}
+                />
+                <span className="hidden sm:inline">RTDB</span>
+              </div>
+            ) : (
+              <button
+                onClick={() => setIsFirebaseModalOpen(true)}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold shadow-sm transition-colors cursor-pointer border ${
+                  isFirebaseOnline
+                    ? 'bg-emerald-500/15 hover:bg-emerald-500/25 border-emerald-500/40 text-emerald-300'
+                    : 'bg-amber-500/15 hover:bg-amber-500/25 border-amber-500/30 text-amber-300'
+                }`}
+                title="Stato del database Firebase (gioco-multi-utente). Clicca per verificare la connessione"
+              >
+                <span
+                  className={`w-2 h-2 rounded-full ${
+                    isFirebaseOnline ? 'bg-emerald-400 animate-pulse' : 'bg-amber-400'
+                  }`}
+                />
+                <span>
+                  {isFirebaseOnline ? 'Firebase RTDB: Online' : 'Firebase RTDB: Connessione...'}
+                </span>
+              </button>
+            )}
 
             <button
               onClick={() => setIsGuideOpen(true)}
@@ -1044,7 +1095,6 @@ export default function App() {
             onKickStudent={handleKickStudent}
             onToggleSound={handleToggleSound}
             onResetGame={handleResetGame}
-            onWipeDatabase={handleWipeDatabase}
           />
         ) : (
           <StudentDevice

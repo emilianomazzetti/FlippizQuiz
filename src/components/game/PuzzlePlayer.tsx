@@ -160,7 +160,9 @@ export const PuzzlePlayer: React.FC<PuzzlePlayerProps> = ({
           </span>
 
           <div
-            className="grid gap-2 p-2 bg-slate-900 rounded-2xl w-64 h-64 border border-slate-800"
+            className={`grid p-2 bg-slate-900 rounded-2xl border border-slate-800 ${
+              size >= 4 ? 'w-72 h-72 sm:w-80 sm:h-80 gap-1' : 'w-64 h-64 gap-2'
+            }`}
             style={{
               gridTemplateColumns: `repeat(${size}, minmax(0, 1fr))`,
               gridTemplateRows: `repeat(${size}, minmax(0, 1fr))`
@@ -174,7 +176,9 @@ export const PuzzlePlayer: React.FC<PuzzlePlayerProps> = ({
                   draggable={!disabled && !submitted}
                   onDragStart={(e) => handleDragStart(e, tile)}
                   onClick={() => handleBankTileClick(tile)}
-                  className={`w-full h-full rounded-xl border shadow-md overflow-hidden hover:scale-105 active:scale-95 transition-transform cursor-grab active:cursor-grabbing relative ${
+                  className={`w-full h-full border shadow-md overflow-hidden hover:scale-105 active:scale-95 transition-transform cursor-grab active:cursor-grabbing relative ${
+                    size >= 4 ? 'rounded-lg' : 'rounded-xl'
+                  } ${
                     isSelected ? 'ring-4 ring-amber-400 border-amber-300' : 'border-white/20'
                   }`}
                   style={getTileStyle(tile.originalPos)}
@@ -207,7 +211,9 @@ export const PuzzlePlayer: React.FC<PuzzlePlayerProps> = ({
           </div>
 
           <div
-            className="grid gap-2 p-2 bg-slate-950 rounded-2xl w-64 h-64 border-2 border-dashed border-indigo-500/40"
+            className={`grid p-2 bg-slate-950 rounded-2xl border-2 border-dashed border-indigo-500/40 ${
+              size >= 4 ? 'w-72 h-72 sm:w-80 sm:h-80 gap-1' : 'w-64 h-64 gap-2'
+            }`}
             style={{
               gridTemplateColumns: `repeat(${size}, minmax(0, 1fr))`,
               gridTemplateRows: `repeat(${size}, minmax(0, 1fr))`

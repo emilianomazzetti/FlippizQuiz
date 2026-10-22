@@ -243,6 +243,45 @@ export function searchLocalCuratedImages(query: string, category: string = 'Tutt
   });
 }
 
+export const PIXABAY_API_KEY = '58158131-d9a95b0e0ed423ae0b87a0e20';
+
+/**
+ * Cerca immagini HD ad alta risoluzione su Pixabay tramite API ufficiale
+ */
+export async function searchPixabayImages(query: string): Promise<WebImage[]> {
+  const clean = query.trim();
+  if (!clean) return [];
+
+  try {
+    const qParam = encodeURIComponent(clean);
+    // SafeSearch attivo per ambiente scolastico, 30 risultati ad alta qualità
+    const endpoint = `https://pixabay.com/api/?key=${PIXABAY_API_KEY}&q=${qParam}&image_type=photo&safesearch=true&per_page=30`;
+
+    const res = await fetch(endpoint);
+    if (!res.ok) return [];
+
+    const data = await res.json();
+    if (!data.hits || !Array.isArray(data.hits)) return [];
+
+    return data.hits.map((hit: any) => {
+      const tagList = (hit.tags || '').split(',').map((t: string) => t.trim());
+      const mainTag = tagList[0] || clean;
+      const titleCap = mainTag.charAt(0).toUpperCase() + mainTag.slice(1);
+
+      return {
+        id: `pix-${hit.id}`,
+        title: titleCap,
+        category: 'Generale',
+        url: hit.webformatURL || hit.largeImageURL || hit.previewURL,
+        tags: tagList.map((t: string) => t.toLowerCase())
+      };
+    });
+  } catch (err) {
+    console.warn('Pixabay API search note:', err);
+    return [];
+  }
+}
+
 /**
  * Cerca immagini libere su Wikimedia Commons API
  */
@@ -291,4 +330,36 @@ export async function searchWikimediaImages(query: string): Promise<WebImage[]> 
     console.warn('Wikimedia Commons search fallback note:', err);
     return [];
   }
+}
+
+/**
+ * Ricerca unificata Web: Pixabay HD come sorgente primaria + Wikimedia Commons come integrazione
+ */
+export async function searchWebImages(query: string): Promise<WebImage[]> {
+  const clean = query.trim();
+  if (!clean) return [];
+
+  // 1. Esegui la ricerca Pixabay primaria
+  const pixabayResults = await searchPixabayImages(clean);
+
+  // Se Pixabay ha già fornito molti risultati soddisfacenti, usali
+  if (pixabayResults.length >= 8) {
+    return pixabayResults;
+  }
+
+  // 2. Altrimenti integra con Wikimedia Commons
+  const wikiResults = await searchWikimediaImages(clean);
+  const combined = [...pixabayResults, ...wikiResults];
+
+  // Rimuovi duplicati di URL
+  const seen = new Set<string>();
+  const unique: WebImage[] = [];
+  for (const img of combined) {
+    if (!seen.has(img.url)) {
+      seen.add(img.url);
+      unique.push(img);
+    }
+  }
+
+  return unique;
 }

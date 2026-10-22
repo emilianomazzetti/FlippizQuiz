@@ -46,7 +46,7 @@ export const OrderCellsPlayer: React.FC<OrderCellsPlayerProps> = ({
     <div className="w-full max-w-2xl mx-auto flex flex-col gap-6">
       <div className="text-center">
         <p className="text-sm font-semibold text-indigo-400 uppercase tracking-wider">
-          Trascina o usa le frecce per posizionare le 4 celle nell'ordine corretto
+          Trascina o usa le frecce per posizionare le celle nell'ordine corretto
         </p>
       </div>
 
@@ -55,9 +55,9 @@ export const OrderCellsPlayer: React.FC<OrderCellsPlayerProps> = ({
           return (
             <div
               key={item.id}
-              className="flex items-center gap-3 p-4 bg-slate-800/90 border-2 border-slate-700 rounded-2xl shadow-lg transition-all"
+              className="flex items-center gap-3 p-3 sm:p-4 bg-slate-800/90 border-2 border-slate-700 rounded-2xl shadow-lg transition-all"
             >
-              <div className="w-8 h-8 rounded-xl bg-indigo-500/20 text-indigo-400 font-black flex items-center justify-center text-sm">
+              <div className="w-8 h-8 rounded-xl bg-indigo-500/20 text-indigo-400 font-black flex items-center justify-center text-sm shrink-0">
                 {index + 1}
               </div>
 
@@ -65,11 +65,11 @@ export const OrderCellsPlayer: React.FC<OrderCellsPlayerProps> = ({
                 <img
                   src={item.image}
                   alt={item.text}
-                  className="w-12 h-12 object-cover rounded-xl border border-slate-600"
+                  className="w-16 h-16 sm:w-20 sm:h-20 object-cover rounded-xl border-2 border-slate-600 shadow-md shrink-0 bg-slate-900"
                 />
               )}
 
-              <div className="flex-1 font-bold text-lg text-white">
+              <div className="flex-1 font-bold text-base sm:text-lg text-white">
                 {item.text}
               </div>
 

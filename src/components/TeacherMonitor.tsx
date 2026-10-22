@@ -58,7 +58,6 @@ interface TeacherMonitorProps {
   onKickStudent?: (playerId: string) => void;
   onToggleSound: () => void;
   onResetGame: () => void;
-  onWipeDatabase: () => void;
 }
 
 export const TeacherMonitor: React.FC<TeacherMonitorProps> = ({
@@ -73,15 +72,13 @@ export const TeacherMonitor: React.FC<TeacherMonitorProps> = ({
   onAddSimulatedStudents,
   onKickStudent,
   onToggleSound,
-  onResetGame,
-  onWipeDatabase
+  onResetGame
 }) => {
   const [isConfigOpen, setIsConfigOpen] = useState(false);
   const [selectedConfigQId, setSelectedConfigQId] = useState<string>('all');
   const [editPoints, setEditPoints] = useState<number>(50);
   const [editTime, setEditTime] = useState<number>(25);
   const [configSavedToast, setConfigSavedToast] = useState(false);
-  const [isWipeModalOpen, setIsWipeModalOpen] = useState(false);
   const [copiedLink, setCopiedLink] = useState(false);
   const [timeRemaining, setTimeRemaining] = useState<number>(25);
 
@@ -953,16 +950,6 @@ export const TeacherMonitor: React.FC<TeacherMonitorProps> = ({
           >
             <Settings className="w-4 h-4 text-indigo-400" />
             Configurazione Docente
-          </button>
-
-          {/* Reset & Wipe Database Button */}
-          <button
-            onClick={() => setIsWipeModalOpen(true)}
-            className="px-3 py-2 rounded-xl bg-slate-800 hover:bg-rose-950/60 border border-slate-700 hover:border-rose-500/50 text-xs font-bold text-rose-300 flex items-center gap-1.5 transition-colors cursor-pointer"
-            title="Azzera completamente i dati della stanza da Firebase e resetta la sessione"
-          >
-            <Trash2 className="w-4 h-4 text-rose-400" />
-            Azzera DB
           </button>
 
           <div className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-850 rounded-xl border border-slate-800 text-xs font-bold text-slate-300">
@@ -1841,48 +1828,6 @@ export const TeacherMonitor: React.FC<TeacherMonitorProps> = ({
         </div>
       )}
 
-      {/* Confirmation Modal to Wipe Database */}
-      {isWipeModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fade-in">
-          <div className="bg-slate-900 border-2 border-rose-500/60 w-full max-w-md rounded-3xl p-6 shadow-2xl space-y-5">
-            <div className="flex items-center gap-3">
-              <div className="p-3 bg-rose-500/20 text-rose-400 rounded-2xl">
-                <AlertTriangle className="w-6 h-6 stroke-[2.5]" />
-              </div>
-              <div>
-                <h3 className="font-black text-lg text-white">Azzera Database Firebase</h3>
-                <p className="text-xs text-rose-300">Azione irreversibile</p>
-              </div>
-            </div>
-
-            <p className="text-xs text-slate-300 leading-relaxed">
-              Sei sicuro di voler <strong>eliminare tutti i dati della stanza {roomState.roomCode}</strong> dal Database di Firebase?
-              Verranno azzerati punteggi, risposte, disegni e partecipanti connessi, ripristinando la stanza pulita alla lobby iniziale.
-            </p>
-
-            <div className="flex justify-end gap-3 pt-2">
-              <button
-                type="button"
-                onClick={() => setIsWipeModalOpen(false)}
-                className="px-4 py-2 text-xs font-bold text-slate-400 hover:text-white cursor-pointer"
-              >
-                Annulla
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  onWipeDatabase();
-                  setIsWipeModalOpen(false);
-                }}
-                className="px-5 py-2.5 bg-rose-600 hover:bg-rose-500 text-white font-black text-xs rounded-xl shadow-lg transition-transform active:scale-95 cursor-pointer flex items-center gap-1.5"
-              >
-                <Trash2 className="w-4 h-4" />
-                Sì, Cancella Dati e Resetta
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 };

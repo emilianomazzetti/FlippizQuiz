@@ -241,11 +241,11 @@ export const QuestionCreator: React.FC<QuestionCreatorProps> = ({
   ]);
 
   // Order Cells
-  const [orderItems, setOrderItems] = useState<{ id: string; text: string }[]>([
-    { id: 'ord-1', text: 'Primavera' },
-    { id: 'ord-2', text: 'Estate' },
-    { id: 'ord-3', text: 'Autunno' },
-    { id: 'ord-4', text: 'Inverno' }
+  const [orderItems, setOrderItems] = useState<{ id: string; text: string; image?: string }[]>([
+    { id: 'ord-1', text: 'Primavera', image: '' },
+    { id: 'ord-2', text: 'Estate', image: '' },
+    { id: 'ord-3', text: 'Autunno', image: '' },
+    { id: 'ord-4', text: 'Inverno', image: '' }
   ]);
 
   // Anagram
@@ -255,7 +255,7 @@ export const QuestionCreator: React.FC<QuestionCreatorProps> = ({
   const [puzzleImage, setPuzzleImage] = useState(
     'https://images.unsplash.com/photo-1579783902614-a3fb3927b675?w=600&auto=format&fit=crop&q=80'
   );
-  const [puzzleGridSize, setPuzzleGridSize] = useState<2 | 3>(2);
+  const [puzzleGridSize, setPuzzleGridSize] = useState<2 | 3 | 4 | 5>(2);
 
   // Word Search
   const [wordSearchList, setWordSearchList] = useState<string>('ROMA, SOLE, MARE, LUNA');
@@ -318,6 +318,15 @@ export const QuestionCreator: React.FC<QuestionCreatorProps> = ({
             ...next[pairIdx],
             itemB: { ...(next[pairIdx].itemB || {}), image: url }
           };
+        }
+        return next;
+      });
+    } else if (activeImagePickerTarget.startsWith('order-')) {
+      const idx = parseInt(activeImagePickerTarget.replace('order-', ''), 10);
+      setOrderItems((prev) => {
+        const next = [...prev];
+        if (next[idx]) {
+          next[idx] = { ...next[idx], image: url };
         }
         return next;
       });
@@ -1151,27 +1160,95 @@ export const QuestionCreator: React.FC<QuestionCreatorProps> = ({
 
           {/* Type 8: Order Cells */}
           {selectedType === 'order_cells' && (
-            <div className="space-y-3">
-              <p className="text-xs text-slate-400">
-                Inserisci le 4 celle nell'ordine CORRETTO (verranno mescolate al giocatore):
-              </p>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+            <div className="space-y-4">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <p className="text-xs text-slate-400">
+                  Inserisci le celle nell'ordine CORRETTO (verranno mescolate al giocatore). Puoi inserire testo, immagini dal web o entrambi:
+                </p>
+                {orderItems.length < 6 && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const nextId = `ord-${Date.now()}`;
+                      setOrderItems([...orderItems, { id: nextId, text: `Elemento ${orderItems.length + 1}`, image: '' }]);
+                    }}
+                    className="px-3 py-1 bg-indigo-600/30 hover:bg-indigo-600 text-indigo-300 hover:text-white rounded-xl text-xs font-bold transition-colors cursor-pointer"
+                  >
+                    + Aggiungi Cella
+                  </button>
+                )}
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 {orderItems.map((item, idx) => (
-                  <div key={item.id} className="flex items-center gap-2 p-2.5 bg-slate-900 rounded-xl border border-slate-800">
-                    <span className="w-6 h-6 rounded-lg bg-indigo-500/20 text-indigo-400 font-bold text-xs flex items-center justify-center">
-                      {idx + 1}°
-                    </span>
-                    <input
-                      type="text"
-                      required
-                      value={item.text}
-                      onChange={(e) => {
-                        const next = [...orderItems];
-                        next[idx].text = e.target.value;
-                        setOrderItems(next);
-                      }}
-                      className="bg-transparent border-none text-sm text-white focus:outline-none flex-1 font-semibold"
-                    />
+                  <div key={item.id} className="p-3 bg-slate-950 rounded-2xl border border-slate-800 space-y-2">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <span className="w-6 h-6 rounded-lg bg-indigo-500/20 text-indigo-400 font-black text-xs flex items-center justify-center">
+                          {idx + 1}°
+                        </span>
+                        <span className="text-xs font-bold text-slate-300">Posizione {idx + 1}</span>
+                      </div>
+
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => openImagePicker(`order-${idx}`)}
+                          className="text-[11px] text-indigo-400 hover:text-indigo-300 hover:underline flex items-center gap-1 cursor-pointer font-semibold"
+                        >
+                          <ImageIcon className="w-3.5 h-3.5" />
+                          {item.image ? 'Cambia Img' : '+ Img Web (Pixabay)'}
+                        </button>
+                        {orderItems.length > 2 && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setOrderItems(orderItems.filter((_, i) => i !== idx));
+                            }}
+                            className="text-slate-500 hover:text-rose-400 p-1 cursor-pointer text-xs"
+                            title="Rimuovi cella"
+                          >
+                            ✕
+                          </button>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-2.5">
+                      {item.image && (
+                        <div className="relative group shrink-0">
+                          <img
+                            src={item.image}
+                            alt={`Img ${idx + 1}`}
+                            className="w-14 h-14 object-cover rounded-xl border border-slate-700 shadow-md"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const next = [...orderItems];
+                              next[idx] = { ...next[idx], image: '' };
+                              setOrderItems(next);
+                            }}
+                            className="absolute -top-1.5 -right-1.5 bg-rose-600 text-white rounded-full w-4 h-4 flex items-center justify-center text-[10px] cursor-pointer shadow"
+                            title="Rimuovi immagine"
+                          >
+                            ✕
+                          </button>
+                        </div>
+                      )}
+
+                      <input
+                        type="text"
+                        value={item.text}
+                        onChange={(e) => {
+                          const next = [...orderItems];
+                          next[idx] = { ...next[idx], text: e.target.value };
+                          setOrderItems(next);
+                        }}
+                        placeholder={item.image ? 'Testo o didascalia (facoltativo)' : 'Testo della cella'}
+                        className="flex-1 bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500 font-semibold"
+                      />
+                    </div>
                   </div>
                 ))}
               </div>
@@ -1208,20 +1285,20 @@ export const QuestionCreator: React.FC<QuestionCreatorProps> = ({
                   <button
                     type="button"
                     onClick={() => openImagePicker('puzzle')}
-                    className="px-4 py-2 bg-slate-800 hover:bg-slate-750 text-indigo-300 rounded-xl border border-indigo-500/30 text-xs font-bold flex items-center gap-2"
+                    className="px-4 py-2 bg-slate-800 hover:bg-slate-750 text-indigo-300 rounded-xl border border-indigo-500/30 text-xs font-bold flex items-center gap-2 cursor-pointer"
                   >
                     <ImageIcon className="w-4 h-4" />
-                    Scegli Immagine Puzzle dal Web
+                    Scegli Immagine Puzzle (Pixabay HD)
                   </button>
-                  <div className="flex items-center gap-2 text-xs">
-                    <span className="text-slate-400">Tessere:</span>
+                  <div className="flex flex-wrap items-center gap-2 text-xs">
+                    <span className="text-slate-400 font-bold">Griglia tessere:</span>
                     <button
                       type="button"
                       onClick={() => setPuzzleGridSize(2)}
-                      className={`px-3 py-1 rounded-lg font-bold ${
+                      className={`px-2.5 py-1 rounded-lg font-bold transition-all cursor-pointer ${
                         puzzleGridSize === 2
-                          ? 'bg-indigo-600 text-white'
-                          : 'bg-slate-900 text-slate-400'
+                          ? 'bg-indigo-600 text-white shadow-md'
+                          : 'bg-slate-900 text-slate-400 hover:text-white'
                       }`}
                     >
                       2x2 (4 pezzi)
@@ -1229,13 +1306,35 @@ export const QuestionCreator: React.FC<QuestionCreatorProps> = ({
                     <button
                       type="button"
                       onClick={() => setPuzzleGridSize(3)}
-                      className={`px-3 py-1 rounded-lg font-bold ${
+                      className={`px-2.5 py-1 rounded-lg font-bold transition-all cursor-pointer ${
                         puzzleGridSize === 3
-                          ? 'bg-indigo-600 text-white'
-                          : 'bg-slate-900 text-slate-400'
+                          ? 'bg-indigo-600 text-white shadow-md'
+                          : 'bg-slate-900 text-slate-400 hover:text-white'
                       }`}
                     >
                       3x3 (9 pezzi)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setPuzzleGridSize(4)}
+                      className={`px-2.5 py-1 rounded-lg font-bold transition-all cursor-pointer ${
+                        puzzleGridSize === 4
+                          ? 'bg-indigo-600 text-white shadow-md'
+                          : 'bg-slate-900 text-slate-400 hover:text-white'
+                      }`}
+                    >
+                      4x4 (16 pezzi)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setPuzzleGridSize(5)}
+                      className={`px-2.5 py-1 rounded-lg font-bold transition-all cursor-pointer ${
+                        puzzleGridSize === 5
+                          ? 'bg-indigo-600 text-white shadow-md'
+                          : 'bg-slate-900 text-slate-400 hover:text-white'
+                      }`}
+                    >
+                      5x5 (25 pezzi)
                     </button>
                   </div>
                 </div>

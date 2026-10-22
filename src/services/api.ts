@@ -83,6 +83,23 @@ export const api = {
     return null;
   },
 
+  async leave(playerId: string): Promise<boolean> {
+    try {
+      if (bc) {
+        bc.postMessage({ type: 'PLAYER_LEFT', playerId });
+      }
+      const res = await fetch('/api/room/leave', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ playerId })
+      });
+      return res.ok;
+    } catch (e) {
+      // Non-blocking
+    }
+    return false;
+  },
+
   async submitQuestion(question: Question): Promise<boolean> {
     try {
       const res = await fetch('/api/room/question', {

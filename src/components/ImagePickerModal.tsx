@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Search, Globe, Link as LinkIcon, X, Check, Image as ImageIcon, Loader2, Sparkles } from 'lucide-react';
-import { searchLocalCuratedImages, searchWikimediaImages, WebImage } from '../utils/imageSearch';
+import { searchLocalCuratedImages, searchWebImages, WebImage } from '../utils/imageSearch';
 
 interface ImagePickerModalProps {
   isOpen: boolean;
@@ -28,7 +28,7 @@ export const ImagePickerModal: React.FC<ImagePickerModalProps> = ({
   // Local curated results for immediate display
   const localImages = searchLocalCuratedImages(query, selectedCategory);
 
-  // Trigger web search on query change with debounce
+  // Trigger web search on query change with debounce (Pixabay HD API + Wikimedia)
   useEffect(() => {
     if (!isOpen || activeTab !== 'search') return;
     const trimmed = query.trim();
@@ -40,14 +40,14 @@ export const ImagePickerModal: React.FC<ImagePickerModalProps> = ({
 
     setIsLoadingWeb(true);
     const timer = setTimeout(() => {
-      searchWikimediaImages(trimmed)
+      searchWebImages(trimmed)
         .then((res) => {
           setWebResults(res);
         })
         .finally(() => {
           setIsLoadingWeb(false);
         });
-    }, 400);
+    }, 350);
 
     return () => clearTimeout(timer);
   }, [query, isOpen, activeTab]);
@@ -82,7 +82,7 @@ export const ImagePickerModal: React.FC<ImagePickerModalProps> = ({
             <div>
               <h3 className="font-black text-lg text-white">Galleria & Ricerca Immagini Web</h3>
               <p className="text-xs text-slate-400">
-                Milioni di immagini educative libere da Wikimedia Commons e archivio HD
+                Centinaia di migliaia di immagini ad alta definizione da Pixabay & Wikimedia Commons
               </p>
             </div>
           </div>
@@ -105,7 +105,7 @@ export const ImagePickerModal: React.FC<ImagePickerModalProps> = ({
             }`}
           >
             <Globe className="w-4 h-4" />
-            Cerca sul Web (Wikimedia & Archivio HD)
+            Cerca sul Web (Pixabay HD & Wikimedia)
           </button>
           <button
             onClick={() => setActiveTab('url')}
