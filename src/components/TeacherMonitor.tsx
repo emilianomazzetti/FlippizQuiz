@@ -42,7 +42,9 @@ import {
   AlertTriangle,
   StopCircle,
   UserX,
-  Info
+  Info,
+  Music,
+  Pause
 } from 'lucide-react';
 
 interface TeacherMonitorProps {
@@ -81,6 +83,39 @@ export const TeacherMonitor: React.FC<TeacherMonitorProps> = ({
   const [configSavedToast, setConfigSavedToast] = useState(false);
   const [copiedLink, setCopiedLink] = useState(false);
   const [timeRemaining, setTimeRemaining] = useState<number>(25);
+
+  // Background Music state
+  const [selectedMusicTheme, setSelectedMusicTheme] = useState<string>(() => sound.getMusicTheme() || 'gameshow');
+  const [musicVolume, setMusicVolume] = useState<number>(() => Math.round(sound.getMusicVolume() * 100));
+  const [isMusicPreviewPlaying, setIsMusicPreviewPlaying] = useState<boolean>(false);
+  const [autoPlayMusicDuringQuestions, setAutoPlayMusicDuringQuestions] = useState<boolean>(true);
+
+  // Auto-play background music during questions
+  useEffect(() => {
+    if (!autoPlayMusicDuringQuestions || !sound.isEnabled()) {
+      sound.stopBackgroundMusic();
+      setIsMusicPreviewPlaying(false);
+      return;
+    }
+
+    if (roomState.phase === 'question_intro' || roomState.phase === 'question_active') {
+      sound.startBackgroundMusic(selectedMusicTheme, musicVolume / 100);
+      setIsMusicPreviewPlaying(true);
+    } else {
+      sound.stopBackgroundMusic();
+      setIsMusicPreviewPlaying(false);
+    }
+  }, [roomState.phase, autoPlayMusicDuringQuestions, selectedMusicTheme, musicVolume]);
+
+  const toggleMusicPreview = () => {
+    if (isMusicPreviewPlaying) {
+      sound.stopBackgroundMusic();
+      setIsMusicPreviewPlaying(false);
+    } else {
+      sound.startBackgroundMusic(selectedMusicTheme, musicVolume / 100);
+      setIsMusicPreviewPlaying(true);
+    }
+  };
 
   const playersList = Object.values(roomState.players || {});
   const questionsList = roomState.questions || [];
@@ -282,8 +317,36 @@ export const TeacherMonitor: React.FC<TeacherMonitorProps> = ({
       text = (currentQ.content as any).words?.join(', ');
     } else if (currentQ.type === 'order_cells') {
       text = (currentQ.content as any).correctOrder?.map((o: any) => o.text).join(' → ');
-    } else if (currentQ.type === 'cell_identify') {
-      text = (currentQ.content as any).cells?.filter((c: any) => c.isMatch).map((c: any) => c.text).join(', ');
+    } else if (currentQ.type === 'puzzle') {
+      const content = currentQ.content as PuzzleContent;
+      const solvedCount = answersList.filter((a) => a.isCorrect).length;
+      return (
+        <div className="p-6 bg-slate-950 border-2 border-purple-500/50 rounded-3xl text-center space-y-4 shadow-2xl animate-scale-up">
+          <div className="flex flex-wrap items-center justify-between gap-2 pb-3 border-b border-purple-500/20">
+            <span className="text-xs font-black text-purple-300 uppercase tracking-widest flex items-center gap-2">
+              <span className="text-base">🧩</span> Soluzione del Puzzle: Immagine Corretta Ricomposta
+            </span>
+            <span className="text-xs font-bold text-emerald-400 bg-emerald-500/15 px-3 py-1 rounded-full border border-emerald-500/30">
+              {solvedCount} su {playersList.length} studenti hanno ricomposto l'immagine
+            </span>
+          </div>
+
+          <h3 className="text-2xl font-black text-white">"{currentQ.title}"</h3>
+
+          {(content?.imageUrl || currentQ.imageUrl) && (
+            <div className="relative inline-block mx-auto rounded-3xl overflow-hidden border-4 border-purple-500/60 shadow-2xl bg-black">
+              <img
+                src={content?.imageUrl || currentQ.imageUrl}
+                alt="Immagine corretta puzzle"
+                className="max-h-72 sm:max-h-80 w-auto object-contain rounded-2xl shadow-inner mx-auto"
+              />
+              <div className="absolute bottom-3 right-3 px-3 py-1 bg-black/85 backdrop-blur-md rounded-xl text-xs font-black text-purple-200 border border-purple-400/40 shadow-lg">
+                Griglia {content?.gridSize || 3}x{content?.gridSize || 3} ({((content?.gridSize || 3) * (content?.gridSize || 3))} tessere)
+              </div>
+            </div>
+          )}
+        </div>
+      );
     }
 
     return text ? (
@@ -1788,6 +1851,99 @@ export const TeacherMonitor: React.FC<TeacherMonitorProps> = ({
                       {t} secondi
                     </button>
                   ))}
+                </div>
+              </div>
+
+              {/* Sezione Musica di Sottofondo Quiz */}
+              <div className="p-4 bg-slate-950 rounded-2xl border border-indigo-500/30 space-y-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Music className="w-4 h-4 text-indigo-400" />
+                    <span className="text-xs font-black text-white uppercase tracking-wider">
+                      Musica di Sottofondo Durante il Quiz
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={toggleMusicPreview}
+                    className="px-2.5 py-1 rounded-lg bg-indigo-500/20 hover:bg-indigo-500/30 text-indigo-300 border border-indigo-500/40 text-[11px] font-bold flex items-center gap-1.5 transition-colors cursor-pointer"
+                  >
+                    {isMusicPreviewPlaying ? (
+                      <>
+                        <Pause className="w-3 h-3 text-amber-400" />
+                        Ferma Anteprima
+                      </>
+                    ) : (
+                      <>
+                        <Play className="w-3 h-3 text-emerald-400 fill-emerald-400" />
+                        Ascolta Tema
+                      </>
+                    )}
+                  </button>
+                </div>
+
+                {/* Theme Selector */}
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                  {[
+                    { id: 'gameshow', name: '📺 Quiz Show Groovy', desc: 'Incalzante & Suspense' },
+                    { id: 'arcade', name: '🎮 Arcade 8-Bit Retro', desc: 'Chiptune energico' },
+                    { id: 'lofi', name: '☕ Chill Classroom', desc: 'Calmo & Concentrazione' },
+                    { id: 'epic', name: '🎺 Epico Avventura', desc: 'Trionfale & Fanfare' },
+                    { id: 'none', name: '🔇 Nessuna Musica', desc: 'Silenzioso' }
+                  ].map((theme) => (
+                    <button
+                      key={theme.id}
+                      type="button"
+                      onClick={() => {
+                        setSelectedMusicTheme(theme.id);
+                        sound.setMusicTheme(theme.id);
+                        if (isMusicPreviewPlaying && theme.id !== 'none') {
+                          sound.startBackgroundMusic(theme.id, musicVolume / 100);
+                        } else if (theme.id === 'none') {
+                          sound.stopBackgroundMusic();
+                          setIsMusicPreviewPlaying(false);
+                        }
+                      }}
+                      className={`p-2.5 rounded-xl text-left border transition-all cursor-pointer ${
+                        selectedMusicTheme === theme.id
+                          ? 'bg-indigo-600/30 border-indigo-500 text-white ring-2 ring-indigo-400/40 shadow-sm'
+                          : 'bg-slate-900 border-slate-800 text-slate-400 hover:border-slate-700'
+                      }`}
+                    >
+                      <span className="block font-bold text-xs text-slate-200">{theme.name}</span>
+                      <span className="text-[10px] text-slate-400">{theme.desc}</span>
+                    </button>
+                  ))}
+                </div>
+
+                {/* Volume & Auto-Play */}
+                <div className="flex flex-wrap items-center justify-between gap-3 pt-2 border-t border-slate-900 text-xs">
+                  <div className="flex items-center gap-2">
+                    <span className="text-slate-400 font-bold">Volume Musica:</span>
+                    <input
+                      type="range"
+                      min={0}
+                      max={100}
+                      value={musicVolume}
+                      onChange={(e) => {
+                        const val = Number(e.target.value);
+                        setMusicVolume(val);
+                        sound.setMusicVolume(val / 100);
+                      }}
+                      className="w-24 accent-indigo-500 cursor-pointer"
+                    />
+                    <span className="text-[11px] font-mono text-indigo-300 w-8">{musicVolume}%</span>
+                  </div>
+
+                  <label className="flex items-center gap-2 cursor-pointer select-none text-slate-300 font-bold">
+                    <input
+                      type="checkbox"
+                      checked={autoPlayMusicDuringQuestions}
+                      onChange={(e) => setAutoPlayMusicDuringQuestions(e.target.checked)}
+                      className="rounded accent-indigo-500"
+                    />
+                    <span>Suona durante le domande</span>
+                  </label>
                 </div>
               </div>
 

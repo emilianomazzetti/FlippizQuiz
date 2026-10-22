@@ -287,6 +287,15 @@ export const QuestionCreator: React.FC<QuestionCreatorProps> = ({
     setLongestVowels(shuffledV.slice(0, 4));
   };
 
+  const randomizeBuilderLetters = () => {
+    const C_POOL = ['R', 'S', 'T', 'L', 'N', 'C', 'M', 'P', 'D', 'G', 'B', 'V', 'F'];
+    const V_POOL = ['A', 'E', 'I', 'O', 'U'];
+    const shuffledC = [...C_POOL].sort(() => 0.5 - Math.random());
+    const shuffledV = [...V_POOL].sort(() => 0.5 - Math.random());
+    setBuilderConsonants(shuffledC.slice(0, 5));
+    setBuilderVowels(shuffledV.slice(0, 2));
+  };
+
   const openImagePicker = (target: string) => {
     setActiveImagePickerTarget(target);
     setIsImagePickerOpen(true);
@@ -381,7 +390,7 @@ export const QuestionCreator: React.FC<QuestionCreatorProps> = ({
       content = {
         category: moleCategory,
         duration: moleDuration,
-        gridSize: moleGridSize
+        gridSize: 3
       } as MoleWhackContent;
     } else if (selectedType === 'draw_vote') {
       content = { prompt: drawPrompt || title } as DrawVoteContent;
@@ -594,12 +603,25 @@ export const QuestionCreator: React.FC<QuestionCreatorProps> = ({
 
         {/* 3. Type-Specific Details */}
         <div className="space-y-4 bg-slate-850 p-6 rounded-2xl border border-slate-800">
-          <label className="text-sm font-bold text-slate-300 flex items-center gap-2">
-            <span className="w-6 h-6 rounded-lg bg-indigo-500/20 text-indigo-400 font-black text-xs flex items-center justify-center">
-              3
-            </span>
-            Configurazione Specifica Gioco:
-          </label>
+          <div className="flex items-center justify-between">
+            <label className="text-sm font-bold text-slate-300 flex items-center gap-2">
+              <span className="w-6 h-6 rounded-lg bg-indigo-500/20 text-indigo-400 font-black text-xs flex items-center justify-center">
+                3
+              </span>
+              Configurazione Specifica Gioco:
+            </label>
+            {selectedType === 'word_builder' && (
+              <button
+                type="button"
+                onClick={randomizeBuilderLetters}
+                className="px-3 py-1.5 rounded-xl bg-indigo-500/20 hover:bg-indigo-500/30 text-indigo-300 border border-indigo-500/40 text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer shadow-sm active:scale-95"
+                title="Estrai casualmente 5 consonanti e 2 vocali bilanciate"
+              >
+                <Shuffle className="w-3.5 h-3.5" />
+                Randomizza Lettere
+              </button>
+            )}
+          </div>
 
           {/* Type 1: Multiple Choice */}
           {selectedType === 'multiple_choice' && (
@@ -992,7 +1014,7 @@ export const QuestionCreator: React.FC<QuestionCreatorProps> = ({
                 Configura la sfida &quot;Becca la Talpa&quot;: scegli la categoria grammaticale bersaglio, il tempo di esposizione del cartellino e le dimensioni della griglia di buche.
               </p>
 
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 {/* 1. Grammatical Category */}
                 <div className="space-y-2 bg-slate-900 p-3.5 rounded-2xl border border-slate-800">
                   <span className="text-xs font-bold text-amber-300 block">
@@ -1042,41 +1064,11 @@ export const QuestionCreator: React.FC<QuestionCreatorProps> = ({
                       </button>
                     ))}
                   </div>
-                  <p className="text-[10px] text-slate-500 mt-1">
-                    &quot;Casuale&quot; fa mostrare a ogni talpa il cartellino per 2-6 secondi a sorpresa.
-                  </p>
-                </div>
-
-                {/* 3. Grid Layout */}
-                <div className="space-y-2 bg-slate-900 p-3.5 rounded-2xl border border-slate-800">
-                  <span className="text-xs font-bold text-emerald-300 block">
-                    3. Dimensioni Griglia:
-                  </span>
-                  <div className="flex flex-col gap-2">
-                    <button
-                      type="button"
-                      onClick={() => setMoleGridSize(3)}
-                      className={`p-3 rounded-xl text-xs font-bold text-left transition-all cursor-pointer ${
-                        moleGridSize === 3
-                          ? 'bg-emerald-600 text-white font-black shadow-md'
-                          : 'bg-slate-800 text-slate-300 hover:bg-slate-750'
-                      }`}
-                    >
-                      <span className="block font-black text-sm">Griglia 3x3</span>
-                      <span className="text-[11px] opacity-80">9 buche totali (ideale smartphone)</span>
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setMoleGridSize(4)}
-                      className={`p-3 rounded-xl text-xs font-bold text-left transition-all cursor-pointer ${
-                        moleGridSize === 4
-                          ? 'bg-emerald-600 text-white font-black shadow-md'
-                          : 'bg-slate-800 text-slate-300 hover:bg-slate-750'
-                      }`}
-                    >
-                      <span className="block font-black text-sm">Griglia 4x4</span>
-                      <span className="text-[11px] opacity-80">16 buche totali (più sfidante)</span>
-                    </button>
+                  <div className="mt-3 p-2.5 bg-slate-950 rounded-xl border border-slate-800 text-[11px] text-slate-400 flex items-center justify-between">
+                    <span className="font-bold text-slate-300">Dimensioni campo:</span>
+                    <span className="px-2 py-0.5 rounded-md bg-emerald-500/20 text-emerald-300 font-black">
+                      Griglia 3x3 (9 buche)
+                    </span>
                   </div>
                 </div>
               </div>

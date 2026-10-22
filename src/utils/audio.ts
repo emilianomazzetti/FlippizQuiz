@@ -195,6 +195,134 @@ class SoundController {
       // Audio playback safety
     }
   }
+
+  // --- BACKGROUND MUSIC SYNTHESIZER ---
+  private musicInterval: any = null;
+  private musicVolumeNode: GainNode | null = null;
+  private currentMusicTheme: string = 'gameshow';
+  private musicVolume: number = 0.25;
+  private isMusicActive: boolean = false;
+
+  public getMusicTheme(): string {
+    return this.currentMusicTheme;
+  }
+
+  public setMusicTheme(theme: string) {
+    this.currentMusicTheme = theme;
+    if (this.isMusicActive) {
+      this.stopBackgroundMusic();
+      this.startBackgroundMusic(theme, this.musicVolume);
+    }
+  }
+
+  public getMusicVolume(): number {
+    return this.musicVolume;
+  }
+
+  public setMusicVolume(vol: number) {
+    this.musicVolume = Math.max(0, Math.min(1, vol));
+    if (this.musicVolumeNode && this.ctx) {
+      this.musicVolumeNode.gain.setValueAtTime(this.musicVolume, this.ctx.currentTime);
+    }
+  }
+
+  public isPlayingMusic(): boolean {
+    return this.isMusicActive;
+  }
+
+  public stopBackgroundMusic() {
+    this.isMusicActive = false;
+    if (this.musicInterval) {
+      clearInterval(this.musicInterval);
+      this.musicInterval = null;
+    }
+  }
+
+  public startBackgroundMusic(theme?: string, volume?: number) {
+    if (theme) this.currentMusicTheme = theme;
+    if (volume !== undefined) this.musicVolume = volume;
+    if (this.currentMusicTheme === 'none' || !this.enabled) {
+      this.stopBackgroundMusic();
+      return;
+    }
+
+    this.stopBackgroundMusic();
+    const ctx = this.getContext();
+    if (!ctx) return;
+
+    this.isMusicActive = true;
+    this.musicVolumeNode = ctx.createGain();
+    this.musicVolumeNode.gain.setValueAtTime(this.musicVolume, ctx.currentTime);
+    this.musicVolumeNode.connect(ctx.destination);
+
+    let step = 0;
+    const bpm = this.currentMusicTheme === 'arcade' ? 140 : this.currentMusicTheme === 'epic' ? 128 : 120;
+    const stepIntervalMs = (60 / bpm / 2) * 1000; // Eighth notes
+
+    // Melody and Bass patterns based on theme
+    const patterns: Record<string, { bass: number[]; lead: (number | null)[] }> = {
+      arcade: {
+        bass: [130.81, 130.81, 164.81, 164.81, 196.0, 196.0, 220.0, 196.0],
+        lead: [523.25, 659.25, 783.99, 1046.5, 783.99, 659.25, 587.33, 659.25]
+      },
+      gameshow: {
+        bass: [110.0, 110.0, 123.47, 130.81, 146.83, 130.81, 123.47, 110.0],
+        lead: [440.0, null, 523.25, null, 659.25, 587.33, null, 440.0]
+      },
+      lofi: {
+        bass: [146.83, null, 174.61, null, 220.0, null, 196.0, null],
+        lead: [293.66, 349.23, 440.0, 523.25, 440.0, 349.23, 329.63, 293.66]
+      },
+      epic: {
+        bass: [110.0, 110.0, 146.83, 146.83, 164.81, 164.81, 220.0, 196.0],
+        lead: [440.0, 554.37, 659.25, 880.0, 659.25, 554.37, 659.25, 880.0]
+      }
+    };
+
+    const currentPattern = patterns[this.currentMusicTheme] || patterns.gameshow;
+
+    this.musicInterval = setInterval(() => {
+      if (!this.isMusicActive || !this.enabled) return;
+      try {
+        const now = ctx.currentTime;
+        const patLen = currentPattern.bass.length;
+        const curBassFreq = currentPattern.bass[step % patLen];
+        const curLeadFreq = currentPattern.lead[step % currentPattern.lead.length];
+
+        // 1. Bass voice
+        if (curBassFreq) {
+          const oscB = ctx.createOscillator();
+          const gainB = ctx.createGain();
+          oscB.type = this.currentMusicTheme === 'arcade' ? 'square' : 'triangle';
+          oscB.frequency.setValueAtTime(curBassFreq, now);
+          gainB.gain.setValueAtTime(0.08, now);
+          gainB.gain.exponentialRampToValueAtTime(0.001, now + stepIntervalMs / 1000 * 0.9);
+          oscB.connect(gainB);
+          gainB.connect(this.musicVolumeNode!);
+          oscB.start(now);
+          oscB.stop(now + stepIntervalMs / 1000 * 0.9);
+        }
+
+        // 2. Lead voice
+        if (curLeadFreq) {
+          const oscL = ctx.createOscillator();
+          const gainL = ctx.createGain();
+          oscL.type = this.currentMusicTheme === 'arcade' ? 'sawtooth' : 'sine';
+          oscL.frequency.setValueAtTime(curLeadFreq, now);
+          gainL.gain.setValueAtTime(0.05, now);
+          gainL.gain.exponentialRampToValueAtTime(0.001, now + stepIntervalMs / 1000 * 0.85);
+          oscL.connect(gainL);
+          gainL.connect(this.musicVolumeNode!);
+          oscL.start(now);
+          oscL.stop(now + stepIntervalMs / 1000 * 0.85);
+        }
+
+        step++;
+      } catch {
+        // Safe audio
+      }
+    }, stepIntervalMs);
+  }
 }
 
 export const sound = new SoundController();

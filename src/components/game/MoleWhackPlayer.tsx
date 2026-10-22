@@ -53,8 +53,9 @@ export const MoleWhackPlayer: React.FC<MoleWhackPlayerProps> = ({
     | 'verbi'
     | 'articoli';
 
-  const gridSize = content.gridSize === 4 ? 4 : 3; // 3x3 or 4x4
-  const totalHoles = gridSize * gridSize;
+  // Grid size is strictly 3x3 (9 holes)
+  const gridSize = 3;
+  const totalHoles = 9;
 
   // Calculate base display duration in milliseconds
   const fixedDurationSec =
@@ -75,14 +76,18 @@ export const MoleWhackPlayer: React.FC<MoleWhackPlayerProps> = ({
     [otherCategories]
   );
 
-  // Sync answer state with parent
+  // Sync answer state with parent: ensure bonusPoints, score, and netPoints are all provided
   const reportScore = (cHits: number, wHits: number) => {
-    const netPoints = cHits * 10 - wHits * 10;
+    const netPoints = Math.max(0, cHits * 10 - wHits * 10);
     onAnswer(true, {
       correctCount: cHits,
       wrongCount: wHits,
-      netPoints: Math.max(0, netPoints),
-      category: targetCategory
+      bonusPoints: netPoints,
+      netPoints: netPoints,
+      score: netPoints,
+      totalMolePoints: netPoints,
+      category: targetCategory,
+      summary: `Talpe: ${cHits} colpite (+${netPoints} pt)`
     });
   };
 

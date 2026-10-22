@@ -26,7 +26,9 @@ import {
   Play,
   Flame,
   CheckCircle2,
-  AlertCircle
+  AlertCircle,
+  Trophy,
+  X
 } from 'lucide-react';
 
 export function getAppBaseUrl(): string {
@@ -446,7 +448,13 @@ export default function App() {
           const wordLen = payload?.length || payload?.word?.length || 0;
           pointsAwarded = basePoints + wordLen;
         } else if (isMoleWhack) {
-          pointsAwarded = basePoints + (payload?.bonusPoints || 0);
+          const moleScore =
+            payload?.bonusPoints ??
+            payload?.netPoints ??
+            payload?.score ??
+            payload?.totalMolePoints ??
+            Math.max(0, ((payload?.correctCount || 0) * 10) - ((payload?.wrongCount || 0) * 10));
+          pointsAwarded = basePoints + moleScore;
         } else {
           pointsAwarded = basePoints + bonus;
         }
