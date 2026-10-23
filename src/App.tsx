@@ -30,8 +30,12 @@ import {
   AlertCircle,
   Trophy,
   X,
-  PlusCircle
+  PlusCircle,
+  Maximize,
+  Minimize,
+  Tablet
 } from 'lucide-react';
+import { useFullscreen } from './utils/fullscreen';
 
 export function getAppBaseUrl(): string {
   if (typeof window === 'undefined') return 'https://flipquiz.app/';
@@ -53,6 +57,9 @@ export default function App() {
   const [isFirebaseOnline, setIsFirebaseOnline] = useState<boolean>(false);
   const [isLeaderboardModalOpen, setIsLeaderboardModalOpen] = useState<boolean>(false);
   const [isTeacherCreatorOpen, setIsTeacherCreatorOpen] = useState<boolean>(false);
+
+  // Fullscreen support for tablet devices and LIM
+  const { isFullscreen: isAppFs, toggle: toggleAppFs } = useFullscreen();
 
   // App Base URL for QR codes that preserves repository path (e.g. /FlipQuix/)
   const appUrl = getAppBaseUrl();
@@ -1142,6 +1149,29 @@ export default function App() {
             >
               <BookOpen className="w-3.5 h-3.5" />
               Guida
+            </button>
+
+            {/* Tablet & Desktop Fullscreen Toggle Button */}
+            <button
+              onClick={toggleAppFs}
+              className={`px-3 py-1.5 rounded-xl border text-xs font-bold flex items-center gap-1.5 transition-colors shadow-sm cursor-pointer ${
+                isAppFs
+                  ? 'bg-emerald-500/15 border-emerald-500/40 text-emerald-300 hover:bg-emerald-500/25'
+                  : 'bg-indigo-600/20 hover:bg-indigo-600/30 border-indigo-500/40 text-indigo-200 hover:text-white'
+              }`}
+              title={isAppFs ? 'Esci dallo Schermo Intero' : 'Forza Schermo Intero (consigliato per tablet)'}
+            >
+              {isAppFs ? (
+                <>
+                  <Minimize className="w-3.5 h-3.5 text-emerald-400" />
+                  <span className="hidden sm:inline">Esci F.S.</span>
+                </>
+              ) : (
+                <>
+                  <Maximize className="w-3.5 h-3.5 text-indigo-400" />
+                  <span className="hidden sm:inline">Schermo Intero</span>
+                </>
+              )}
             </button>
           </div>
         </div>

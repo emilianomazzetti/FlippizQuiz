@@ -22,8 +22,17 @@ import {
   Zap,
   Star,
   Award,
-  AlertCircle
+  AlertCircle,
+  Maximize,
+  Minimize,
+  Tablet
 } from 'lucide-react';
+import {
+  useFullscreen,
+  requestAppFullscreen,
+  isAppFullscreen,
+  isFullscreenSupported
+} from '../utils/fullscreen';
 
 interface StudentDeviceProps {
   roomState: RoomState;
@@ -58,6 +67,25 @@ export const StudentDevice: React.FC<StudentDeviceProps> = ({
   const [pin, setPin] = useState(initialPin || roomState.roomCode);
   const [activeTab, setActiveTab] = useState<'play' | 'create'>('create');
   const [hasCreatedQuestion, setHasCreatedQuestion] = useState(false);
+
+  const { isFullscreen, isSupported, enter: enterFullscreen, exit: exitFullscreen, toggle: toggleFullscreen } = useFullscreen();
+
+  // Tablet auto-fullscreen: attempt to trigger fullscreen on any user tap/touch interaction if not already fullscreen
+  useEffect(() => {
+    const handleFirstUserInteraction = () => {
+      if (!isAppFullscreen() && isFullscreenSupported()) {
+        requestAppFullscreen().catch(() => {});
+      }
+    };
+
+    window.addEventListener('touchend', handleFirstUserInteraction, { passive: true });
+    window.addEventListener('click', handleFirstUserInteraction, { passive: true });
+
+    return () => {
+      window.removeEventListener('touchend', handleFirstUserInteraction);
+      window.removeEventListener('click', handleFirstUserInteraction);
+    };
+  }, []);
 
   useEffect(() => {
     if (initialPin) setPin(initialPin);
@@ -170,6 +198,11 @@ export const StudentDevice: React.FC<StudentDeviceProps> = ({
     const cleanName = name.trim();
     if (!cleanName) return;
 
+    // Forzare Schermo Intero su Tablet / Smartphone
+    if (!isAppFullscreen() && isFullscreenSupported()) {
+      requestAppFullscreen().catch(() => {});
+    }
+
     // Check duplicate student name (case-insensitive)
     const existingPlayers = Object.values(roomState.players || {});
     const isDuplicate = existingPlayers.some(
@@ -187,16 +220,61 @@ export const StudentDevice: React.FC<StudentDeviceProps> = ({
 
   const handleCreatedQuestion = (q: Question) => {
     if (hasActiveQuestion) return; // Only 1 question allowed per student
+    if (!isAppFullscreen() && isFullscreenSupported()) {
+      requestAppFullscreen().catch(() => {});
+    }
     onSubmitQuestion(q);
     setHasCreatedQuestion(true);
     setQuestionWasDeletedNotice(false);
     setActiveTab('play'); // Immediately navigate to "Stato Attesa Quiz"
   };
 
+  const handleAnswerWithFs = (isCorrect: boolean, payload?: any) => {
+    if (!isAppFullscreen() && isFullscreenSupported()) {
+      requestAppFullscreen().catch(() => {});
+    }
+    onSubmitAnswer(isCorrect, payload);
+  };
+
+  const handleSaveDrawingWithFs = (dataUrl: string) => {
+    if (!isAppFullscreen() && isFullscreenSupported()) {
+      requestAppFullscreen().catch(() => {});
+    }
+    onSaveDrawing(dataUrl);
+  };
+
+  const handleVoteDrawingWithFs = (targetPlayerId: string) => {
+    if (!isAppFullscreen() && isFullscreenSupported()) {
+      requestAppFullscreen().catch(() => {});
+    }
+    onVoteDrawing(targetPlayerId);
+  };
+
   // 1. NOT LOGGED IN: Join Screen
   if (!activePlayer) {
     return (
       <div className="w-full max-w-md mx-auto p-6 bg-slate-900 border border-slate-800 rounded-3xl shadow-2xl space-y-6 text-slate-100 animate-fade-in my-6">
+        {/* Tablet Fullscreen Quick Button in Join Card */}
+        <div className="flex items-center justify-between pb-3 border-b border-slate-800">
+          <div className="flex items-center gap-1.5 text-xs font-bold text-slate-400">
+            <Tablet className="w-4 h-4 text-indigo-400" />
+            <span>Tablet & Smartphone</span>
+          </div>
+          <button
+            type="button"
+            onClick={toggleFullscreen}
+            className={`px-3 py-1.5 rounded-xl text-xs font-bold border flex items-center gap-1.5 transition-all cursor-pointer ${
+              isFullscreen
+                ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40 hover:bg-emerald-500/30'
+                : 'bg-indigo-600/30 text-indigo-200 border-indigo-500/50 hover:bg-indigo-600/50'
+            }`}
+            title="Attiva la modalità a schermo intero sul dispositivo tablet"
+          >
+            {isFullscreen ? <Minimize className="w-3.5 h-3.5" /> : <Maximize className="w-3.5 h-3.5" />}
+            <span>{isFullscreen ? 'Esci Schermo Intero' : 'Schermo Intero ⛶'}</span>
+          </button>
+        </div>
+
         <div className="text-center space-y-2">
           <div className="w-16 h-16 mx-auto rounded-3xl bg-gradient-to-tr from-indigo-500 to-purple-600 flex items-center justify-center text-3xl shadow-lg shadow-indigo-500/30">
             ⚡
@@ -287,6 +365,9 @@ export const StudentDevice: React.FC<StudentDeviceProps> = ({
           <button
             type="button"
             onClick={() => {
+              if (!isAppFullscreen() && isFullscreenSupported()) {
+                requestAppFullscreen().catch(() => {});
+              }
               const testNames = ['Matteo B.', 'Sofia L.', 'Lorenzo T.', 'Chiara M.', 'Alessandro G.'];
               const randomName = testNames[Math.floor(Math.random() * testNames.length)];
               onJoinRoom(randomName, selectedAvatar, pin.trim() || 'FLIP-101');
@@ -303,7 +384,43 @@ export const StudentDevice: React.FC<StudentDeviceProps> = ({
 
   // 2. LOGGED IN: Student App
   return (
-    <div className="w-full max-w-2xl mx-auto flex flex-col gap-6 text-slate-100">
+    <div className="w-full max-w-2xl mx-auto flex flex-col gap-5 text-slate-100">
+      {/* Tablet Fullscreen Promotion Banner if not in fullscreen */}
+      {!isFullscreen && (
+        <div
+          onClick={() => enterFullscreen()}
+          className="p-3.5 bg-gradient-to-r from-indigo-600 via-purple-600 to-indigo-600 border border-indigo-400 rounded-2xl shadow-xl flex items-center justify-between gap-3 text-white cursor-pointer active:scale-98 transition-all animate-pulse"
+        >
+          <div className="flex items-center gap-2.5">
+            <div className="w-9 h-9 rounded-xl bg-white/20 flex items-center justify-center shrink-0">
+              <Tablet className="w-5 h-5 text-amber-300" />
+            </div>
+            <div>
+              <div className="text-xs font-black flex items-center gap-1.5">
+                MODALITÀ TABLET: SCHERMO INTERO
+                <span className="text-[10px] bg-amber-400 text-slate-950 font-black px-1.5 py-0.5 rounded-full uppercase">
+                  Consigliato
+                </span>
+              </div>
+              <div className="text-[11px] text-indigo-100">
+                Tocca qui per eseguire FlipQuiz a Schermo Intero sul tablet
+              </div>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              enterFullscreen();
+            }}
+            className="px-3.5 py-2 bg-amber-400 hover:bg-amber-300 text-slate-950 font-black text-xs rounded-xl shadow flex items-center gap-1.5 shrink-0 cursor-pointer"
+          >
+            <Maximize className="w-3.5 h-3.5" />
+            <span>Attiva</span>
+          </button>
+        </div>
+      )}
+
       {/* Student Profile Bar */}
       <div className="flex items-center justify-between p-4 bg-slate-900 border border-slate-800 rounded-2xl shadow-xl">
         <div className="flex items-center gap-3">
@@ -316,7 +433,31 @@ export const StudentDevice: React.FC<StudentDeviceProps> = ({
           </div>
         </div>
 
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2 sm:gap-3">
+          {/* Fullscreen Toggle */}
+          <button
+            type="button"
+            onClick={toggleFullscreen}
+            className={`px-2.5 py-1.5 rounded-xl border text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer ${
+              isFullscreen
+                ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40 hover:bg-emerald-500/30'
+                : 'bg-indigo-600/30 text-indigo-200 border-indigo-500/50 hover:bg-indigo-600/50'
+            }`}
+            title={isFullscreen ? 'Esci da schermo intero' : 'Attiva schermo intero tablet'}
+          >
+            {isFullscreen ? (
+              <>
+                <Minimize className="w-3.5 h-3.5" />
+                <span className="hidden sm:inline">Esci F.S.</span>
+              </>
+            ) : (
+              <>
+                <Maximize className="w-3.5 h-3.5" />
+                <span className="hidden sm:inline">Schermo Intero</span>
+              </>
+            )}
+          </button>
+
           {activePlayer.streak > 1 && (
             <div className="flex items-center gap-1 px-2.5 py-1 bg-amber-500/20 border border-amber-500/40 rounded-xl text-xs font-black text-amber-300">
               <Flame className="w-3.5 h-3.5 fill-amber-400" />
@@ -492,13 +633,13 @@ export const StudentDevice: React.FC<StudentDeviceProps> = ({
               <>
                 <QuestionRenderer
                   question={currentQ}
-                  onAnswer={onSubmitAnswer}
+                  onAnswer={handleAnswerWithFs}
                   disabled={isContinuousGame ? (timeRemaining <= 0 && (!roomState.turnStartTime || Date.now() - roomState.turnStartTime > 2000)) : myAnswer !== null}
                   myPlayerId={activePlayer.id}
                   drawings={roomState.drawingsThisTurn || {}}
                   isGalleryMode={false}
-                  onSaveDrawing={onSaveDrawing}
-                  onVoteDrawing={onVoteDrawing}
+                  onSaveDrawing={handleSaveDrawingWithFs}
+                  onVoteDrawing={handleVoteDrawingWithFs}
                 />
 
                 {currentQ.type === 'draw_vote' ? (
@@ -617,8 +758,8 @@ export const StudentDevice: React.FC<StudentDeviceProps> = ({
           myPlayerId={activePlayer.id}
           drawings={roomState.drawingsThisTurn || {}}
           isGalleryMode={true}
-          onSaveDrawing={onSaveDrawing}
-          onVoteDrawing={onVoteDrawing}
+          onSaveDrawing={handleSaveDrawingWithFs}
+          onVoteDrawing={handleVoteDrawingWithFs}
         />
       )}
 
