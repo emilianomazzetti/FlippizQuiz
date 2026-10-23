@@ -12,10 +12,12 @@ import {
   FillBlanksContent,
   AnagramContent,
   MemoryMatchContent,
-  CellIdentifyContent
+  CellIdentifyContent,
+  PuzzleContent
 } from '../types/quiz';
 import { QRCodeDisplay } from './QRCodeDisplay';
 import { sound } from '../utils/audio';
+import { generateWordSearchGrid } from '../utils/wordSearchGenerator';
 import confetti from 'canvas-confetti';
 import {
   Play,
@@ -314,7 +316,73 @@ export const TeacherMonitor: React.FC<TeacherMonitorProps> = ({
     } else if (currentQ.type === 'math_challenge') {
       text = (currentQ.content as any).generatedProblems?.map((p: any) => `${p.equation} = ${p.answer}`).join('; ');
     } else if (currentQ.type === 'word_search') {
-      text = (currentQ.content as any).words?.join(', ');
+      const content = currentQ.content as any;
+      const rawWords: string[] = content?.words || [];
+      const gridSize: number = content?.gridSize || 8;
+      const { matrix, solutionCoords, wordsToFind } = generateWordSearchGrid(rawWords, gridSize);
+
+      const isSolutionCell = (r: number, c: number) => {
+        return solutionCoords.some((sc) => sc.r === r && sc.c === c);
+      };
+
+      return (
+        <div className="p-6 bg-slate-950 border-2 border-emerald-500/50 rounded-3xl text-center space-y-5 shadow-2xl animate-scale-up">
+          <div className="flex flex-wrap items-center justify-between gap-2 pb-3 border-b border-emerald-500/20">
+            <span className="text-xs font-black text-emerald-300 uppercase tracking-widest flex items-center gap-2">
+              <span className="text-base">🔍</span> Soluzione Crucipuzzle: Parole Nascoste Evidenziate in Verde
+            </span>
+            <span className="text-xs font-bold text-emerald-400 bg-emerald-500/15 px-3 py-1 rounded-full border border-emerald-500/30">
+              {wordsToFind.length} parole da individuare
+            </span>
+          </div>
+
+          <h3 className="text-xl md:text-2xl font-black text-white">"{currentQ.title}"</h3>
+
+          {/* Words to Find Pills */}
+          <div className="flex flex-wrap items-center justify-center gap-2">
+            <span className="text-xs text-slate-400 font-bold mr-1">Tutte le parole nascoste:</span>
+            {wordsToFind.map((w) => (
+              <span
+                key={w}
+                className="px-3 py-1 rounded-xl bg-emerald-500/20 border border-emerald-400/50 text-emerald-300 font-black text-xs shadow-sm"
+              >
+                ✓ {w}
+              </span>
+            ))}
+          </div>
+
+          {/* Solution Grid with Target Words Highlighted in Green */}
+          <div className="flex justify-center pt-2">
+            <div
+              className="grid gap-1.5 p-3.5 bg-slate-900 border-2 border-slate-750 rounded-3xl shadow-2xl select-none max-w-full overflow-x-auto"
+              style={{
+                gridTemplateColumns: `repeat(${gridSize}, minmax(0, 1fr))`
+              }}
+            >
+              {matrix.map((row, r) =>
+                row.map((char, c) => {
+                  const isTarget = isSolutionCell(r, c);
+                  return (
+                    <div
+                      key={`sol-${r}-${c}`}
+                      className={`w-9 h-9 sm:w-11 sm:h-11 rounded-xl font-black text-sm sm:text-base flex items-center justify-center transition-all ${
+                        isTarget
+                          ? 'bg-emerald-500 text-slate-950 font-black ring-2 ring-emerald-300 shadow-md scale-102'
+                          : 'bg-slate-800/60 text-slate-400 border border-slate-750/50 font-medium'
+                      }`}
+                    >
+                      {char}
+                    </div>
+                  );
+                })
+              )}
+            </div>
+          </div>
+          <p className="text-xs text-slate-400">
+            Le caselle evidenziate in verde brillante mostrano la posizione esatta di tutte le parole nascoste nel crucipuzzle.
+          </p>
+        </div>
+      );
     } else if (currentQ.type === 'order_cells') {
       text = (currentQ.content as any).correctOrder?.map((o: any) => o.text).join(' → ');
     } else if (currentQ.type === 'puzzle') {
@@ -404,20 +472,9 @@ export const TeacherMonitor: React.FC<TeacherMonitorProps> = ({
               </div>
             </div>
 
-            {/* Come Funziona */}
-            <div className="p-4 bg-slate-950/80 border border-blue-500/30 rounded-2xl text-left flex items-start gap-3">
-              <Info className="w-5 h-5 text-blue-400 shrink-0 mt-0.5" />
-              <div className="text-xs text-slate-300 space-y-1">
-                <p className="font-black text-white text-sm">Come funziona:</p>
-                <p className="leading-relaxed">
-                  Scegli una delle opzioni disponibili sul tuo dispositivo e rispondi prima dello scadere del tempo. I 3 studenti più veloci ottengono un punteggio bonus per il dito più rapido!
-                </p>
-              </div>
-            </div>
-
-            {/* Domanda per la classe (Senza mostrare le opzioni per evitare suggerimenti) */}
-            <div className="p-8 bg-slate-950 rounded-3xl border border-slate-800/80 space-y-4 shadow-xl">
-              <span className="text-xs font-extrabold uppercase tracking-widest text-slate-400 block">
+            {/* Domanda per la classe con le 4 opzioni visibili sul Monitor */}
+            <div className="p-8 bg-slate-950 rounded-3xl border border-slate-800/80 space-y-6 shadow-xl text-center">
+              <span className="text-xs font-extrabold uppercase tracking-widest text-blue-400 block">
                 Domanda per la classe:
               </span>
               <h2 className="text-3xl md:text-4xl font-black text-white leading-tight">
@@ -425,14 +482,45 @@ export const TeacherMonitor: React.FC<TeacherMonitorProps> = ({
               </h2>
 
               {q.imageUrl && (
-                <div className="max-h-64 rounded-2xl overflow-hidden border border-slate-800 inline-block bg-slate-900 mx-auto mt-2">
+                <div className="max-h-64 rounded-2xl overflow-hidden border border-slate-800 inline-block bg-slate-900 mx-auto">
                   <img src={q.imageUrl} alt="Domanda" className="max-h-64 w-auto object-contain mx-auto" />
                 </div>
               )}
 
-              <p className="text-xs text-slate-500 italic pt-2">
-                (Le 4 opzioni di risposta sono mostrate esclusivamente sui dispositivi degli studenti per evitare suggerimenti).
-              </p>
+              {/* Opzioni di Risposta sul Monitor LIM */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2 text-left">
+                {((q.content as any)?.options || []).map((opt: any, idx: number) => {
+                  const letters = ['A', 'B', 'C', 'D'];
+                  const colors = [
+                    'bg-red-500/15 border-red-500/50 text-red-100',
+                    'bg-blue-500/15 border-blue-500/50 text-blue-100',
+                    'bg-amber-500/15 border-amber-500/50 text-amber-100',
+                    'bg-emerald-500/15 border-emerald-500/50 text-emerald-100'
+                  ];
+                  const badgeColors = [
+                    'bg-red-500 text-white',
+                    'bg-blue-500 text-white',
+                    'bg-amber-500 text-slate-950',
+                    'bg-emerald-500 text-slate-950'
+                  ];
+                  return (
+                    <div
+                      key={opt.id || idx}
+                      className={`p-4 rounded-2xl border-2 flex items-center gap-3.5 shadow-lg ${colors[idx % 4]}`}
+                    >
+                      <span className={`w-9 h-9 rounded-xl font-black text-sm flex items-center justify-center shrink-0 shadow-md ${badgeColors[idx % 4]}`}>
+                        {letters[idx] || `${idx + 1}`}
+                      </span>
+                      {opt.imageUrl && (
+                        <img src={opt.imageUrl} alt="" className="w-12 h-12 object-cover rounded-xl border border-white/20 shrink-0" />
+                      )}
+                      <span className="font-extrabold text-base md:text-lg text-white">
+                        {opt.text}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
             </div>
           </div>
         );
@@ -446,17 +534,6 @@ export const TeacherMonitor: React.FC<TeacherMonitorProps> = ({
               </div>
               <div className="text-xs text-slate-400">
                 Creata dallo studente: <strong className="text-amber-300 font-bold">{q.creatorName}</strong>
-              </div>
-            </div>
-
-            {/* Come Funziona */}
-            <div className="p-4 bg-slate-950/80 border border-amber-500/30 rounded-2xl text-left flex items-start gap-3">
-              <Info className="w-5 h-5 text-amber-400 shrink-0 mt-0.5" />
-              <div className="text-xs text-slate-300 space-y-1">
-                <p className="font-black text-white text-sm">Come funziona:</p>
-                <p className="leading-relaxed">
-                  Valuta attentamente l'affermazione proposta e indica sul tuo dispositivo se è VERA o FALSA prima che scada il tempo.
-                </p>
               </div>
             </div>
 
@@ -491,17 +568,6 @@ export const TeacherMonitor: React.FC<TeacherMonitorProps> = ({
               </div>
               <div className="text-xs text-slate-400">
                 Creata dallo studente: <strong className="text-amber-300 font-bold">{q.creatorName}</strong>
-              </div>
-            </div>
-
-            {/* Come Funziona */}
-            <div className="p-4 bg-slate-950/80 border border-teal-500/30 rounded-2xl text-left flex items-start gap-3">
-              <Info className="w-5 h-5 text-teal-400 shrink-0 mt-0.5" />
-              <div className="text-xs text-slate-300 space-y-1">
-                <p className="font-black text-white text-sm">Come funziona:</p>
-                <p className="leading-relaxed">
-                  Digita la parola o il valore corretto nel campo di testo sul tuo smartphone/tablet e premi invio prima dello scadere del tempo.
-                </p>
               </div>
             </div>
 
@@ -540,17 +606,6 @@ export const TeacherMonitor: React.FC<TeacherMonitorProps> = ({
               </div>
             </div>
 
-            {/* Come Funziona */}
-            <div className="p-4 bg-slate-950/80 border border-pink-500/30 rounded-2xl text-left flex items-start gap-3">
-              <Info className="w-5 h-5 text-pink-400 shrink-0 mt-0.5" />
-              <div className="text-xs text-slate-300 space-y-1">
-                <p className="font-black text-white text-sm">Come funziona:</p>
-                <p className="leading-relaxed">
-                  Disegna sul tuo dispositivo prima che scada il tempo! Poi la classe visualizzerà la galleria dei disegni e voterà le creazioni più belle con le stelline.
-                </p>
-              </div>
-            </div>
-
             {/* Banner Disegno Richiesto */}
             <div className="p-8 bg-gradient-to-br from-slate-950 via-slate-900 to-pink-950/40 rounded-3xl border-2 border-pink-500/50 space-y-4 text-center shadow-2xl">
               <span className="text-xs font-black uppercase tracking-widest text-pink-400 block">
@@ -563,7 +618,7 @@ export const TeacherMonitor: React.FC<TeacherMonitorProps> = ({
                 ✍️ USA IL TUO DISPOSITIVO E IL TUO DITO!
               </div>
               <p className="text-xs text-slate-400 max-w-lg mx-auto">
-                Tavolozza di colori, gomma e spessore pennello attivi sui telefoni degli studenti. Premi "Invia Disegno Definitivo" quando hai completato.
+                Tavolozza di colori, pennello e forme attivi sui telefoni degli studenti. Premi "INVIA DISEGNO" quando hai completato.
               </p>
             </div>
           </div>
@@ -589,17 +644,6 @@ export const TeacherMonitor: React.FC<TeacherMonitorProps> = ({
               </div>
               <div className="text-xs text-slate-400">
                 Creata dallo studente: <strong className="text-amber-300 font-bold">{q.creatorName}</strong>
-              </div>
-            </div>
-
-            {/* Come Funziona */}
-            <div className="p-4 bg-slate-950/80 border border-amber-500/30 rounded-2xl text-left flex items-start gap-3">
-              <Info className="w-5 h-5 text-amber-400 shrink-0 mt-0.5" />
-              <div className="text-xs text-slate-300 space-y-1">
-                <p className="font-black text-white text-sm">Come funziona:</p>
-                <p className="leading-relaxed">
-                  Colpisci velocemente quante più talpe puoi prima dello scadere del tempo. Ma fai molta attenzione: colpisci SOLO le talpe con le parole appartenenti alla categoria indicata!
-                </p>
               </div>
             </div>
 
@@ -634,17 +678,6 @@ export const TeacherMonitor: React.FC<TeacherMonitorProps> = ({
               </div>
               <div className="text-xs text-slate-400">
                 Creata dallo studente: <strong className="text-amber-300 font-bold">{q.creatorName}</strong>
-              </div>
-            </div>
-
-            {/* Come Funziona */}
-            <div className="p-4 bg-slate-950/80 border border-purple-500/30 rounded-2xl text-left flex items-start gap-3">
-              <Info className="w-5 h-5 text-purple-400 shrink-0 mt-0.5" />
-              <div className="text-xs text-slate-300 space-y-1">
-                <p className="font-black text-white text-sm">Come funziona:</p>
-                <p className="leading-relaxed">
-                  Ricomponi l'immagine sul tuo dispositivo spostando o toccando i tasselli per scambiarli finché il puzzle non è completo prima dello scadere del tempo.
-                </p>
               </div>
             </div>
 
@@ -684,17 +717,6 @@ export const TeacherMonitor: React.FC<TeacherMonitorProps> = ({
               </div>
               <div className="text-xs text-slate-400">
                 Creata dallo studente: <strong className="text-amber-300 font-bold">{q.creatorName}</strong>
-              </div>
-            </div>
-
-            {/* Come Funziona */}
-            <div className="p-4 bg-slate-950/80 border border-indigo-500/30 rounded-2xl text-left flex items-start gap-3">
-              <Info className="w-5 h-5 text-indigo-400 shrink-0 mt-0.5" />
-              <div className="text-xs text-slate-300 space-y-1">
-                <p className="font-black text-white text-sm">Come funziona:</p>
-                <p className="leading-relaxed">
-                  Componi quante più parole possibili prima dello scadere del tempo. Regola: <strong>1 lettera = 1 punto!</strong> Ogni parola deve essere una parola italiana valida (almeno 2 lettere con vocale).
-                </p>
               </div>
             </div>
 
@@ -750,17 +772,6 @@ export const TeacherMonitor: React.FC<TeacherMonitorProps> = ({
               </div>
             </div>
 
-            {/* Come Funziona */}
-            <div className="p-4 bg-slate-950/80 border border-fuchsia-500/30 rounded-2xl text-left flex items-start gap-3">
-              <Info className="w-5 h-5 text-fuchsia-400 shrink-0 mt-0.5" />
-              <div className="text-xs text-slate-300 space-y-1">
-                <p className="font-black text-white text-sm">Come funziona:</p>
-                <p className="leading-relaxed">
-                  Usa le 14 lettere a disposizione (10 consonanti + 4 vocali) per trovare la parola italiana valida più lunga possibile. Chi trova la parola più lunga vince un super bonus di <strong>+25 punti</strong>!
-                </p>
-              </div>
-            </div>
-
             {/* 14 Lettere a disposizione */}
             <div className="p-8 bg-slate-950 rounded-3xl border-2 border-fuchsia-500/40 space-y-5 text-center shadow-xl">
               <span className="text-xs font-extrabold uppercase tracking-widest text-fuchsia-300 block">
@@ -788,7 +799,7 @@ export const TeacherMonitor: React.FC<TeacherMonitorProps> = ({
               </div>
 
               <p className="text-xs text-slate-400 max-w-lg mx-auto">
-                Ogni parola inviata aggiorna il record personale dello studente. Vince il super bonus chi registra la parola più lunga della manche!
+                Ogni parola inviata aggiorna il record personale dello studente. Vince il super bonus (+25 pt) chi registra la parola più lunga della manche!
               </p>
             </div>
           </div>
@@ -821,17 +832,6 @@ export const TeacherMonitor: React.FC<TeacherMonitorProps> = ({
               </div>
             </div>
 
-            {/* Come Funziona */}
-            <div className="p-4 bg-slate-950/80 border border-emerald-500/30 rounded-2xl text-left flex items-start gap-3">
-              <Info className="w-5 h-5 text-emerald-400 shrink-0 mt-0.5" />
-              <div className="text-xs text-slate-300 space-y-1">
-                <p className="font-black text-white text-sm">Come funziona:</p>
-                <p className="leading-relaxed">
-                  Completa il testo selezionando le parole corrette per ciascuno spazio vuoto dal menù a tendina verticale sul tuo dispositivo prima che scada il tempo.
-                </p>
-              </div>
-            </div>
-
             {/* Testo mascherato */}
             <div className="p-8 bg-slate-950 rounded-3xl border border-emerald-500/30 space-y-4 text-center shadow-xl">
               <span className="text-xs font-extrabold uppercase tracking-widest text-emerald-400 block">
@@ -859,17 +859,6 @@ export const TeacherMonitor: React.FC<TeacherMonitorProps> = ({
               </div>
               <div className="text-xs text-slate-400">
                 Creata dallo studente: <strong className="text-amber-300 font-bold">{q.creatorName}</strong>
-              </div>
-            </div>
-
-            {/* Come Funziona */}
-            <div className="p-4 bg-slate-950/80 border border-sky-500/30 rounded-2xl text-left flex items-start gap-3">
-              <Info className="w-5 h-5 text-sky-400 shrink-0 mt-0.5" />
-              <div className="text-xs text-slate-300 space-y-1">
-                <p className="font-black text-white text-sm">Come funziona:</p>
-                <p className="leading-relaxed">
-                  Tocca le lettere mescolate sul tuo dispositivo per ricomporre la parola segreta in ordine esatto prima che scada il tempo.
-                </p>
               </div>
             </div>
 
@@ -905,17 +894,6 @@ export const TeacherMonitor: React.FC<TeacherMonitorProps> = ({
               </div>
               <div className="text-xs text-slate-400">
                 Creata dallo studente: <strong className="text-amber-300 font-bold">{q.creatorName}</strong>
-              </div>
-            </div>
-
-            {/* Come Funziona */}
-            <div className="p-4 bg-slate-950/80 border border-purple-500/30 rounded-2xl text-left flex items-start gap-3">
-              <Info className="w-5 h-5 text-purple-400 shrink-0 mt-0.5" />
-              <div className="text-xs text-slate-300 space-y-1">
-                <p className="font-black text-white text-sm">Come funziona:</p>
-                <p className="leading-relaxed">
-                  Tocca le carte coperte sul tuo dispositivo per trovare e abbinare tutte le coppie corrispondenti prima dello scadere del tempo.
-                </p>
               </div>
             </div>
 
@@ -962,76 +940,112 @@ export const TeacherMonitor: React.FC<TeacherMonitorProps> = ({
   const isGameRunning =
     roomState.phase !== 'lobby' && roomState.phase !== 'podium';
 
+  const realStudents = Object.values(roomState.players || {}).filter((p) => !p.isSimulated);
+  const allRealStudentsSubmitted =
+    realStudents.length > 0 &&
+    realStudents.every((p) =>
+      (roomState.questions || []).some(
+        (q) => q.creatorName?.trim().toLowerCase() === p.name.trim().toLowerCase() || (q as any).creatorId === p.id
+      )
+    );
+
   return (
     <div className="w-full min-h-[85vh] flex flex-col justify-between text-slate-100">
-      {/* Top Classroom Bar */}
-      <div className="flex flex-wrap items-center justify-between gap-3 p-4 bg-slate-900/95 border border-slate-800 rounded-2xl shadow-xl backdrop-blur-md mb-6">
-        <div className="flex items-center gap-4">
-          <div className="px-3 py-1.5 rounded-xl bg-gradient-to-r from-indigo-500 to-purple-600 font-black text-sm tracking-widest text-white shadow">
-            {roomState.roomCode}
+      {/* Top Classroom Bar (Only visible during active question/podium phases, since in lobby it's placed at bottom) */}
+      {roomState.phase !== 'lobby' && (
+        <div
+          style={{ width: '500px', maxWidth: '100%' }}
+          className="flex flex-wrap items-center justify-between gap-3 p-4 bg-slate-900/95 border border-slate-800 rounded-2xl shadow-xl backdrop-blur-md mb-6 w-[500px] max-w-full mx-auto"
+        >
+          <div className="flex items-center gap-4">
+            <div className="px-3 py-1.5 rounded-xl bg-gradient-to-r from-indigo-500 to-purple-600 font-black text-sm tracking-widest text-white shadow">
+              {roomState.roomCode}
+            </div>
+            <div>
+              <h1 className="font-extrabold text-lg text-white">FlipQuiz Live Monitor</h1>
+              <p className="text-xs text-slate-400">Schermo Proiezione Docente / LIM</p>
+            </div>
           </div>
-          <div>
-            <h1 className="font-extrabold text-lg text-white">FlipQuiz Live Monitor</h1>
-            <p className="text-xs text-slate-400">Schermo Proiezione Docente / LIM</p>
-          </div>
-        </div>
 
-        <div className="flex flex-wrap items-center gap-2.5">
-          {/* Sound Toggle */}
-          <button
-            onClick={onToggleSound}
-            className={`p-2.5 rounded-xl border transition-colors cursor-pointer ${
-              soundEnabled
-                ? 'bg-slate-800 border-slate-700 text-indigo-400'
-                : 'bg-slate-800 border-slate-700 text-slate-500'
-            }`}
-            title={soundEnabled ? 'Disattiva suoni' : 'Attiva suoni'}
-          >
-            {soundEnabled ? (
-              <Volume2 className="w-4 h-4" />
-            ) : (
-              <VolumeX className="w-4 h-4" />
-            )}
-          </button>
-
-          {/* Termina Gara Button (Always available when game is running) */}
-          {isGameRunning && (
+          <div className="flex flex-wrap items-center gap-2.5">
+            {/* Sound Toggle */}
             <button
-              onClick={onTerminateGame}
-              className="px-3.5 py-2 rounded-xl bg-gradient-to-r from-rose-600 to-red-700 hover:from-rose-500 hover:to-red-600 text-white font-black text-xs flex items-center gap-1.5 shadow-lg shadow-rose-950/40 transition-transform active:scale-95 cursor-pointer animate-pulse"
-              title="Termina immediatamente la gara e mostra il podio finale"
+              onClick={onToggleSound}
+              className={`p-2.5 rounded-xl border transition-colors cursor-pointer ${
+                soundEnabled
+                  ? 'bg-slate-800 border-slate-700 text-indigo-400'
+                  : 'bg-slate-800 border-slate-700 text-slate-500'
+              }`}
+              title={soundEnabled ? 'Disattiva suoni' : 'Attiva suoni'}
             >
-              <Flag className="w-4 h-4 fill-white" />
-              Termina Gara
+              {soundEnabled ? (
+                <Volume2 className="w-4 h-4" />
+              ) : (
+                <VolumeX className="w-4 h-4" />
+              )}
             </button>
-          )}
 
-          {/* Configurazione Docente */}
-          <button
-            onClick={() => openQuestionConfig()}
-            className="px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-750 border border-slate-700 text-xs font-bold text-slate-200 flex items-center gap-2 transition-colors cursor-pointer"
-          >
-            <Settings className="w-4 h-4 text-indigo-400" />
-            Configurazione Docente
-          </button>
+            {/* Termina Gara Button */}
+            {isGameRunning && (
+              <button
+                onClick={onTerminateGame}
+                className="px-3.5 py-2 rounded-xl bg-gradient-to-r from-rose-600 to-red-700 hover:from-rose-500 hover:to-red-600 text-white font-black text-xs flex items-center gap-1.5 shadow-lg shadow-rose-950/40 transition-transform active:scale-95 cursor-pointer animate-pulse"
+                title="Termina immediatamente la gara e mostra il podio finale"
+              >
+                <Flag className="w-4 h-4 fill-white" />
+                Termina Gara
+              </button>
+            )}
 
-          <div className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-850 rounded-xl border border-slate-800 text-xs font-bold text-slate-300">
-            <Users className="w-4 h-4 text-emerald-400" />
-            {playersList.length} Studenti
+            {/* Configurazione Docente */}
+            <button
+              onClick={() => openQuestionConfig()}
+              className="px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-750 border border-slate-700 text-xs font-bold text-slate-200 flex items-center gap-2 transition-colors cursor-pointer"
+            >
+              <Settings className="w-4 h-4 text-indigo-400" />
+              Configurazione Docente
+            </button>
           </div>
         </div>
-      </div>
+      )}
 
       {/* Main Classroom Screen Content */}
       <div className="flex-1 flex flex-col items-center justify-center p-2">
         {/* PHASE 1: LOBBY & REPOSITORY */}
         {roomState.phase === 'lobby' && (
-          <div className="w-full max-w-5xl grid grid-cols-1 md:grid-cols-12 gap-8 items-start">
-            {/* Left Column: QR Code & Access */}
-            <div className="md:col-span-5 bg-slate-900 border border-slate-800 p-8 rounded-3xl shadow-2xl flex flex-col items-center text-center">
-              <span className="px-3 py-1 rounded-full bg-emerald-500/20 text-emerald-300 text-xs font-black uppercase tracking-wider border border-emerald-500/30 mb-4">
-                Inquadra per Partecipare
-              </span>
+          <div className="w-full max-w-5xl flex flex-col gap-6">
+            {/* All students submitted questions notice */}
+            {allRealStudentsSubmitted && (
+              <div className="w-full p-5 bg-gradient-to-r from-emerald-500/20 via-teal-500/20 to-emerald-500/20 border-2 border-emerald-500/60 rounded-3xl flex flex-col sm:flex-row items-center justify-between gap-4 text-emerald-200 shadow-2xl animate-fade-in">
+                <div className="flex items-center gap-3.5">
+                  <div className="w-12 h-12 rounded-2xl bg-emerald-500/30 flex items-center justify-center text-2xl shrink-0 shadow-inner">
+                    🎉
+                  </div>
+                  <div>
+                    <h4 className="font-black text-white text-base">
+                      Tutti gli studenti connessi hanno inserito la propria domanda!
+                    </h4>
+                    <p className="text-xs text-emerald-300">
+                      Tutti i {realStudents.length} studenti hanno contribuito al repository. La classe è pronta per avviare la sfida!
+                    </p>
+                  </div>
+                </div>
+                <button
+                  onClick={onStartGame}
+                  className="px-6 py-3 rounded-2xl bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-slate-950 font-black text-sm flex items-center gap-2 shadow-xl transition-transform active:scale-95 shrink-0 cursor-pointer"
+                >
+                  <Play className="w-4 h-4 fill-slate-950" />
+                  Avvia FlipQuiz Live Ora!
+                </button>
+              </div>
+            )}
+
+            <div className="w-full grid grid-cols-1 md:grid-cols-12 gap-8 items-start">
+              {/* Left Column: QR Code & Access */}
+              <div className="md:col-span-5 bg-slate-900 border border-slate-800 p-8 rounded-3xl shadow-2xl flex flex-col items-center text-center">
+                <span className="px-3 py-1 rounded-full bg-emerald-500/20 text-emerald-300 text-xs font-black uppercase tracking-wider border border-emerald-500/30 mb-4">
+                  Inquadra per Partecipare
+                </span>
 
               <QRCodeDisplay value={`${appUrl}?pin=${roomState.roomCode}&role=student`} size={220} />
 
@@ -1188,6 +1202,48 @@ export const TeacherMonitor: React.FC<TeacherMonitorProps> = ({
                     </span>
                   )}
                 </div>
+              </div>
+            </div>
+          </div>
+
+            {/* Room Bar at bottom of lobby (below the questions repository) */}
+            <div className="w-full flex flex-wrap items-center justify-between gap-4 p-4 sm:p-5 bg-slate-900/95 border border-slate-800 rounded-3xl shadow-xl backdrop-blur-md mt-2">
+              <div className="flex items-center gap-4">
+                <div className="px-3.5 py-2 rounded-2xl bg-gradient-to-r from-indigo-500 to-purple-600 font-black text-sm tracking-widest text-white shadow">
+                  {roomState.roomCode}
+                </div>
+                <div>
+                  <h3 className="font-extrabold text-base text-white">FlipQuiz Live Monitor</h3>
+                  <p className="text-xs text-slate-400">Schermo Proiezione Docente / LIM</p>
+                </div>
+              </div>
+
+              <div className="flex flex-wrap items-center gap-2.5">
+                {/* Sound Toggle */}
+                <button
+                  onClick={onToggleSound}
+                  className={`p-2.5 rounded-xl border transition-colors cursor-pointer ${
+                    soundEnabled
+                      ? 'bg-slate-800 border-slate-700 text-indigo-400'
+                      : 'bg-slate-800 border-slate-700 text-slate-500'
+                  }`}
+                  title={soundEnabled ? 'Disattiva suoni' : 'Attiva suoni'}
+                >
+                  {soundEnabled ? (
+                    <Volume2 className="w-4 h-4" />
+                  ) : (
+                    <VolumeX className="w-4 h-4" />
+                  )}
+                </button>
+
+                {/* Configurazione Docente */}
+                <button
+                  onClick={() => openQuestionConfig()}
+                  className="px-4 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-750 border border-slate-700 text-xs font-bold text-slate-200 flex items-center gap-2 transition-colors cursor-pointer"
+                >
+                  <Settings className="w-4 h-4 text-indigo-400" />
+                  Configurazione Docente
+                </button>
               </div>
             </div>
           </div>
@@ -1431,13 +1487,21 @@ export const TeacherMonitor: React.FC<TeacherMonitorProps> = ({
                 </h4>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 max-h-72 overflow-y-auto pr-1">
                   {playersList.map((player) => {
-                    const sub = roomState.answersThisTurn[player.id];
-                    const isSuccess = !!(sub && sub.isCorrect);
+                    const sub = (roomState.answersThisTurn || {})[player.id];
+                    const isWordSearch = currentQ.type === 'word_search';
+                    const hasFoundWords = isWordSearch && (sub?.answerPayload?.foundWords?.length > 0 || sub?.answerPayload?.count > 0);
+                    const isSuccess = !!(sub && (sub.isCorrect || hasFoundWords));
 
                     // Determine detailed answer text for what the student answered
                     let answerDetail = '';
                     if (!sub) {
                       answerDetail = 'Nessuna risposta data (Tempo scaduto)';
+                    } else if (currentQ.type === 'word_search') {
+                      const found = sub.answerPayload?.foundWords || [];
+                      const total = sub.answerPayload?.totalWords || (currentQ.content as any)?.words?.length || 4;
+                      answerDetail = found.length > 0
+                        ? `Parole trovate (${found.length}/${total}): [${found.join(', ')}] • +${sub.pointsAwarded} pt`
+                        : 'Nessuna parola trovata (0 pt)';
                     } else if (currentQ.type === 'fill_blanks') {
                       const userAnswers =
                         sub.answerPayload?.userAnswers ||
@@ -1833,24 +1897,50 @@ export const TeacherMonitor: React.FC<TeacherMonitorProps> = ({
               </div>
 
               <div>
-                <label className="text-xs font-bold text-slate-300 block mb-1">
-                  Tempo risposta per la domanda:
-                </label>
-                <div className="flex gap-2">
-                  {[10, 25, 40, 60].map((t) => (
+                <div className="flex items-center justify-between mb-1.5">
+                  <label className="text-xs font-bold text-slate-300">
+                    Tempo risposta per la domanda:
+                  </label>
+                  <span className="text-xs font-black text-amber-300 bg-amber-500/10 px-2.5 py-0.5 rounded-full border border-amber-500/30">
+                    {editTime >= 60
+                      ? `${Math.floor(editTime / 60)}m ${editTime % 60 ? (editTime % 60) + 's' : ''}`.trim()
+                      : `${editTime}s`}{' '}
+                    ({editTime} secondi)
+                  </span>
+                </div>
+                <div className="flex flex-wrap gap-1.5 mb-2">
+                  {[10, 20, 30, 45, 60, 90, 120, 180, 300].map((t) => (
                     <button
                       key={t}
                       type="button"
                       onClick={() => setEditTime(t)}
-                      className={`flex-1 py-2 rounded-xl text-xs font-black cursor-pointer transition-colors ${
+                      className={`px-3 py-1.5 rounded-xl text-xs font-black cursor-pointer transition-colors ${
                         editTime === t
-                          ? 'bg-indigo-600 text-white'
+                          ? 'bg-indigo-600 text-white shadow'
                           : 'bg-slate-800 text-slate-400 hover:bg-slate-750'
                       }`}
                     >
-                      {t} secondi
+                      {t >= 60 ? `${t / 60}m` : `${t}s`}
                     </button>
                   ))}
+                </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setEditTime((t) => Math.max(10, t - 10))}
+                    disabled={editTime <= 10}
+                    className="flex-1 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-750 disabled:opacity-40 text-xs font-bold text-slate-300 border border-slate-700 cursor-pointer"
+                  >
+                    -10s
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setEditTime((t) => Math.min(300, t + 10))}
+                    disabled={editTime >= 300}
+                    className="flex-1 py-1.5 rounded-xl bg-indigo-500/20 hover:bg-indigo-500/30 text-indigo-300 border border-indigo-500/40 text-xs font-black cursor-pointer"
+                  >
+                    +10 secondi (max 5m)
+                  </button>
                 </div>
               </div>
 

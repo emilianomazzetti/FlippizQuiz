@@ -170,16 +170,8 @@ export const DrawingCanvas: React.FC<DrawingCanvasProps> = ({
         e.currentTarget.releasePointerCapture(e.pointerId);
       } catch (_) {}
     }
-    triggerAutoSave();
-  };
-
-  const triggerAutoSave = () => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const dataUrl = canvas.toDataURL('image/png');
-    onSaveDrawing(dataUrl);
-    setSavedSuccess(true);
-    setTimeout(() => setSavedSuccess(false), 2000);
+    // IMPORTANT: Raising the finger/pointer DOES NOT submit the drawing!
+    // Submission happens exclusively when the student clicks the button "INVIA DISEGNO".
   };
 
   const undo = () => {
@@ -192,7 +184,6 @@ export const DrawingCanvas: React.FC<DrawingCanvasProps> = ({
     const previous = history[history.length - 1];
     setHistory((prev) => prev.slice(0, -1));
     ctx.putImageData(previous, 0, 0);
-    triggerAutoSave();
   };
 
   const clearCanvas = () => {
@@ -205,13 +196,17 @@ export const DrawingCanvas: React.FC<DrawingCanvasProps> = ({
     ctx.fillStyle = '#0f172a';
     ctx.fillRect(0, 0, canvas.width, canvas.height);
     setHasDrawn(false);
-    triggerAutoSave();
   };
 
   const handleConfirmDrawing = () => {
     if (disabled || isConfirmed) return;
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const dataUrl = canvas.toDataURL('image/png');
     setIsConfirmed(true);
-    triggerAutoSave();
+    onSaveDrawing(dataUrl);
+    setSavedSuccess(true);
+    setTimeout(() => setSavedSuccess(false), 2500);
   };
 
   return (
@@ -365,24 +360,24 @@ export const DrawingCanvas: React.FC<DrawingCanvasProps> = ({
         {savedSuccess && (
           <div className="absolute top-3 right-3 bg-emerald-500 text-slate-950 text-xs font-black px-3 py-1 rounded-full shadow-lg flex items-center gap-1.5 animate-bounce">
             <Check className="w-4 h-4 stroke-[3]" />
-            Disegno salvato!
+            Disegno inviato!
           </div>
         )}
       </div>
 
       {/* Explicit Save & Send Button */}
       {!isConfirmed && (
-        <div className="flex items-center justify-between gap-3">
-          <p className="text-xs text-slate-400">
-            Disegna con il dito o il mouse. Quando hai finito, tocca Conferma Disegno per inviarlo alla classe!
+        <div className="flex flex-col sm:flex-row items-center justify-between gap-3 p-3 bg-slate-900 border border-slate-800 rounded-2xl">
+          <p className="text-xs text-slate-300">
+            Disegna liberamente sul riquadro. Quando il tuo disegno è pronto, premi <strong className="text-emerald-400">INVIA DISEGNO</strong> per mandarlo alla LIM!
           </p>
           <button
             type="button"
             onClick={handleConfirmDrawing}
-            className="px-5 py-2.5 bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-400 hover:to-teal-500 text-white font-black text-sm rounded-xl shadow-lg flex items-center gap-2 transition-transform active:scale-95 shrink-0 cursor-pointer"
+            className="w-full sm:w-auto px-6 py-3 bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-400 hover:to-teal-500 text-white font-black text-sm rounded-xl shadow-xl flex items-center justify-center gap-2 transition-transform active:scale-95 shrink-0 cursor-pointer"
           >
             <Send className="w-4 h-4" />
-            Conferma Disegno
+            INVIA DISEGNO
           </button>
         </div>
       )}

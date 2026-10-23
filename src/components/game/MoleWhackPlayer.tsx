@@ -110,7 +110,7 @@ export const MoleWhackPlayer: React.FC<MoleWhackPlayerProps> = ({
 
         // 2. Decide if a new mole should emerge
         const currentCount = Object.keys(updated).length;
-        const maxSimultaneous = gridSize === 4 ? 3 : 2;
+        const maxSimultaneous = 2;
 
         if (currentCount < maxSimultaneous) {
           // Find empty holes

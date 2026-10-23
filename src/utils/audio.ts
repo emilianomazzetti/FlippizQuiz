@@ -260,7 +260,7 @@ class SoundController {
     const stepIntervalMs = (60 / bpm / 2) * 1000; // Eighth notes
 
     // Melody and Bass patterns based on theme
-    const patterns: Record<string, { bass: number[]; lead: (number | null)[] }> = {
+    const patterns: Record<string, { bass: (number | null)[]; lead: (number | null)[] }> = {
       arcade: {
         bass: [130.81, 130.81, 164.81, 164.81, 196.0, 196.0, 220.0, 196.0],
         lead: [523.25, 659.25, 783.99, 1046.5, 783.99, 659.25, 587.33, 659.25]

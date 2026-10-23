@@ -34,14 +34,45 @@ export const WhackMolePlayer: React.FC<WhackMolePlayerProps> = ({
 }) => {
   const category = content.category || 'nomi';
   const durationSetting = content.duration || 'casuale';
-  const gridSize = content.gridSize || 3;
-  const totalHoles = gridSize * gridSize;
+  // Strictly locked to 3x3 (9 holes) per requirement
+  const gridSize = 3;
+  const totalHoles = 9;
 
   const [activeMoles, setActiveMoles] = useState<Record<number, ActiveMole>>({});
   const [correctHits, setCorrectHits] = useState(0);
   const [wrongHits, setWrongHits] = useState(0);
   const [hitEffects, setHitEffects] = useState<HitEffect[]>([]);
   const [submitted, setSubmitted] = useState(false);
+
+  // Live reporting to parent so student always receives their points
+  const reportProgress = (cHits: number, wHits: number) => {
+    const netPoints = Math.max(0, cHits * 10 - wHits * 10);
+    onAnswer(true, {
+      correctCount: cHits,
+      wrongCount: wHits,
+      errorCount: wHits,
+      bonusPoints: netPoints,
+      netPoints: netPoints,
+      score: netPoints,
+      totalMolePoints: netPoints,
+      category,
+      targetCategory: category,
+      summary: `Talpe: ${cHits} colpite (+${netPoints} pt)`
+    });
+  };
+
+  const latestScoresRef = useRef({ correctHits: 0, wrongHits: 0 });
+  useEffect(() => {
+    latestScoresRef.current = { correctHits, wrongHits };
+  }, [correctHits, wrongHits]);
+
+  // Initial zero-registration & unmount flush
+  useEffect(() => {
+    reportProgress(0, 0);
+    return () => {
+      reportProgress(latestScoresRef.current.correctHits, latestScoresRef.current.wrongHits);
+    };
+  }, []);
 
   // References to keep callbacks current in game loop
   const stateRef = useRef({
@@ -99,9 +130,8 @@ export const WhackMolePlayer: React.FC<WhackMolePlayerProps> = ({
         }
       });
 
-      // 2. Decide if we should spawn new moles
-      // Limit concurrent moles to 2 for 3x3, 3 for 4x4
-      const maxConcurrent = gridSize === 4 ? 3 : 2;
+      // 2. Decide if we should spawn new moles (2 simultaneous for 3x3)
+      const maxConcurrent = 2;
       const currentCount = Object.keys(updated).length;
 
       if (currentCount < maxConcurrent) {
@@ -113,7 +143,7 @@ export const WhackMolePlayer: React.FC<WhackMolePlayerProps> = ({
 
         if (emptyHoles.length > 0) {
           const chosenHole = emptyHoles[Math.floor(Math.random() * emptyHoles.length)];
-          // 50% chance target category, 50% chance distractor
+          // 55% chance target category, 45% chance distractor
           const isTarget = Math.random() < 0.55;
           let word = '';
 
@@ -141,7 +171,7 @@ export const WhackMolePlayer: React.FC<WhackMolePlayerProps> = ({
     }, 450);
 
     return () => clearInterval(interval);
-  }, [category, durationSetting, gridSize, totalHoles, disabled, submitted]);
+  }, [category, durationSetting, disabled, submitted]);
 
   // Handle whacking a mole
   const handleWhack = (holeIndex: number) => {
@@ -172,13 +202,17 @@ export const WhackMolePlayer: React.FC<WhackMolePlayerProps> = ({
       if (typeof navigator !== 'undefined' && navigator.vibrate) {
         navigator.vibrate([40, 30, 40]);
       }
-      setCorrectHits((prev) => prev + 1);
+      const nextCorrect = correctHits + 1;
+      setCorrectHits(nextCorrect);
+      reportProgress(nextCorrect, wrongHits);
     } else {
       sound.playWrong();
       if (typeof navigator !== 'undefined' && navigator.vibrate) {
         navigator.vibrate([150]);
       }
-      setWrongHits((prev) => prev + 1);
+      const nextWrong = wrongHits + 1;
+      setWrongHits(nextWrong);
+      reportProgress(correctHits, nextWrong);
     }
 
     // Mark mole as hit
@@ -203,29 +237,18 @@ export const WhackMolePlayer: React.FC<WhackMolePlayerProps> = ({
     }
   }, [disabled]);
 
-  // Submit answer only when round expires (after actually running) or when user explicitly finishes
+  // Submit answer when round expires
   useEffect(() => {
     if (disabled && !submitted && hasGameStartedRef.current && Date.now() - mountTimeRef.current > 2500) {
       setSubmitted(true);
-      onAnswer(correctHits > 0, {
-        correctCount: correctHits,
-        errorCount: wrongHits,
-        bonusPoints: totalScore,
-        targetCategory: category
-      });
+      reportProgress(correctHits, wrongHits);
     }
-  }, [disabled, submitted, correctHits, wrongHits, category, totalScore]);
+  }, [disabled, submitted, correctHits, wrongHits]);
 
   const handleFinishEarly = () => {
     if (submitted) return;
     setSubmitted(true);
-    onAnswer(correctHits > 0, {
-      correctCount: correctHits,
-      errorCount: wrongHits,
-      bonusPoints: totalScore,
-      completedEarly: true,
-      targetCategory: category
-    });
+    reportProgress(correctHits, wrongHits);
   };
 
   return (

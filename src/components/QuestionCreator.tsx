@@ -543,25 +543,55 @@ export const QuestionCreator: React.FC<QuestionCreatorProps> = ({
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2">
             {/* Time selection */}
             <div>
-              <span className="text-xs font-bold text-slate-400 block mb-2 flex items-center gap-1.5">
-                <Clock className="w-3.5 h-3.5 text-indigo-400" />
-                Tempo a disposizione:
-              </span>
-              <div className="flex gap-2">
-                {[10, 25, 40, 60].map((t) => (
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-xs font-bold text-slate-400 flex items-center gap-1.5">
+                  <Clock className="w-3.5 h-3.5 text-indigo-400" />
+                  Tempo a disposizione:
+                </span>
+                <span className="text-xs font-black text-amber-300 font-mono bg-slate-900 px-2 py-0.5 rounded-lg border border-slate-750">
+                  {timeLimit}s {timeLimit >= 60 ? `(${Math.floor(timeLimit / 60)}m ${timeLimit % 60 ? `${timeLimit % 60}s` : ''})` : ''}
+                </span>
+              </div>
+
+              {/* Quick Presets */}
+              <div className="flex gap-1.5 mb-2">
+                {[15, 30, 45, 60, 90, 120].map((t) => (
                   <button
                     key={t}
                     type="button"
                     onClick={() => setTimeLimit(t)}
-                    className={`flex-1 py-2 rounded-xl text-xs font-black transition-all ${
+                    className={`flex-1 py-1.5 rounded-xl text-xs font-black transition-all cursor-pointer ${
                       timeLimit === t
                         ? 'bg-indigo-600 text-white shadow-md'
                         : 'bg-slate-900 text-slate-400 hover:text-white border border-slate-800'
                     }`}
                   >
-                    {t}s {t === 25 ? '★' : ''}
+                    {t}s
                   </button>
                 ))}
+              </div>
+
+              {/* Step +10s up to 5 minutes (300s) */}
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  disabled={timeLimit <= 10}
+                  onClick={() => setTimeLimit((prev) => Math.max(10, prev - 10))}
+                  className="px-2.5 py-1.5 bg-slate-900 hover:bg-slate-800 disabled:opacity-30 border border-slate-800 text-slate-300 rounded-xl text-xs font-black transition-colors cursor-pointer"
+                  title="Diminuisci di 10 secondi"
+                >
+                  -10s
+                </button>
+                <button
+                  type="button"
+                  disabled={timeLimit >= 300}
+                  onClick={() => setTimeLimit((prev) => Math.min(300, prev + 10))}
+                  className="flex-1 py-1.5 bg-indigo-600/20 hover:bg-indigo-600/30 border border-indigo-500/40 text-indigo-300 hover:text-white rounded-xl text-xs font-black flex items-center justify-center gap-1.5 transition-all active:scale-98 cursor-pointer"
+                  title="Aumenta di 10 secondi fino a 5 minuti (300 secondi)"
+                >
+                  <span>+10 secondi</span>
+                  <span className="text-[10px] text-indigo-400">(Fino a max 5 min / 300s)</span>
+                </button>
               </div>
             </div>
 

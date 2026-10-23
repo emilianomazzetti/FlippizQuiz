@@ -12,6 +12,7 @@ import { TeacherMonitor } from './components/TeacherMonitor';
 import { StudentDevice } from './components/StudentDevice';
 import { ArchitectureGuideModal } from './components/ArchitectureGuideModal';
 import { FirebaseDiagnosticModal } from './components/FirebaseDiagnosticModal';
+import { QuestionCreator } from './components/QuestionCreator';
 import { sound } from './utils/audio';
 import confetti from 'canvas-confetti';
 import { api } from './services/api';
@@ -28,7 +29,8 @@ import {
   CheckCircle2,
   AlertCircle,
   Trophy,
-  X
+  X,
+  PlusCircle
 } from 'lucide-react';
 
 export function getAppBaseUrl(): string {
@@ -49,6 +51,8 @@ export default function App() {
   const [isGuideOpen, setIsGuideOpen] = useState<boolean>(false);
   const [isFirebaseModalOpen, setIsFirebaseModalOpen] = useState<boolean>(false);
   const [isFirebaseOnline, setIsFirebaseOnline] = useState<boolean>(false);
+  const [isLeaderboardModalOpen, setIsLeaderboardModalOpen] = useState<boolean>(false);
+  const [isTeacherCreatorOpen, setIsTeacherCreatorOpen] = useState<boolean>(false);
 
   // App Base URL for QR codes that preserves repository path (e.g. /FlipQuix/)
   const appUrl = getAppBaseUrl();
@@ -160,10 +164,9 @@ export default function App() {
     const unsubFirebase = firebaseSync.listenToRoom(roomState.roomCode, (firebaseState) => {
       setRoomState((prev) => {
         const curPlayer = myPlayerRef.current;
-        // Detect database wipe or full reset
+        // Detect intentional database wipe (only when resetEpoch changes explicitly)
         const isWiped =
-          (firebaseState.resetEpoch && firebaseState.resetEpoch !== prev.resetEpoch) ||
-          (firebaseState.phase === 'lobby' && Object.keys(firebaseState.players || {}).length === 0 && Object.keys(prev.players || {}).length > 0);
+          !!(firebaseState.resetEpoch && prev.resetEpoch && firebaseState.resetEpoch !== prev.resetEpoch);
 
         if (isWiped) {
           try {
@@ -183,23 +186,32 @@ export default function App() {
           };
         }
 
+        // Check if student was explicitly kicked by teacher
+        const isExplicitlyKicked =
+          curPlayer && Array.isArray(firebaseState.kickedPlayerIds) && firebaseState.kickedPlayerIds.includes(curPlayer.id);
+
+        if (isExplicitlyKicked) {
+          try {
+            localStorage.removeItem('flipquiz_my_player');
+          } catch (e) {}
+          setWasKicked(true);
+          setMyPlayer(null);
+          setMyPlayerId('');
+          return {
+            ...firebaseState,
+            answersThisTurn: firebaseState.answersThisTurn || {},
+            drawingsThisTurn: firebaseState.drawingsThisTurn || {}
+          };
+        }
+
         let mergedPlayers = { ...(firebaseState.players || {}) };
-        // If local student was in room but removed by teacher (kick out)
-        if (curPlayer && !mergedPlayers[curPlayer.id]) {
-          if (prev.players && prev.players[curPlayer.id]) {
-            try {
-              localStorage.removeItem('flipquiz_my_player');
-            } catch (e) {}
-            setWasKicked(true);
-            setMyPlayer(null);
-            setMyPlayerId('');
-            return {
-              ...firebaseState,
-              answersThisTurn: firebaseState.answersThisTurn || {},
-              drawingsThisTurn: firebaseState.drawingsThisTurn || {}
-            };
+        // If local student was logged in and active, ensure they stay connected and re-sync to Firebase
+        if (curPlayer) {
+          if (!mergedPlayers[curPlayer.id]) {
+            mergedPlayers[curPlayer.id] = curPlayer;
+            // Silently re-register presence in Firebase so server and classmates have it
+            firebaseSync.joinPlayer(roomState.roomCode, curPlayer);
           }
-          mergedPlayers[curPlayer.id] = curPlayer;
         }
 
         return {
@@ -233,11 +245,9 @@ export default function App() {
     };
 
     window.addEventListener('beforeunload', handleDisconnect);
-    window.addEventListener('pagehide', handleDisconnect);
 
     return () => {
       window.removeEventListener('beforeunload', handleDisconnect);
-      window.removeEventListener('pagehide', handleDisconnect);
     };
   }, [myPlayerId, roomState.roomCode]);
 
@@ -246,6 +256,15 @@ export default function App() {
     myPlayer && roomState.players && roomState.players[myPlayer.id]
       ? roomState.players[myPlayer.id]
       : myPlayer;
+
+  // Persist updated player score to local storage
+  useEffect(() => {
+    if (activeStudent) {
+      try {
+        localStorage.setItem('flipquiz_my_player', JSON.stringify(activeStudent));
+      } catch (e) {}
+    }
+  }, [activeStudent?.score, activeStudent?.streak]);
 
   // Automatically transition from question_intro (3 seconds) to question_active
   useEffect(() => {
@@ -399,7 +418,8 @@ export default function App() {
       const isWordBuilder = currentQ && currentQ.type === 'word_builder';
       const isLongestWord = currentQ && currentQ.type === 'longest_word';
       const isMoleWhack = currentQ && currentQ.type === 'mole_whack';
-      const isContinuous = isWordBuilder || isLongestWord || isMoleWhack;
+      const isWordSearch = currentQ && currentQ.type === 'word_search';
+      const isContinuous = isWordBuilder || isLongestWord || isMoleWhack || isWordSearch;
       const existingSubmission = prev.answersThisTurn[playerId];
 
       // For standard questions, don't allow duplicate submissions.
@@ -433,9 +453,12 @@ export default function App() {
       // 1. Word Builder: basePoints + totalLetters used (1 letter = 1 point)
       // 2. Longest Word: basePoints + word length (1 letter = 1 point) + potential +25 bonus at end of round
       // 3. Mole Whack: basePoints + mole hits score
-      // 4. Standard: basePoints + speed bonus
+      // 4. Word Search (Crucipuzzle): partial points for each word found!
+      // 5. Standard: basePoints + speed bonus
       let pointsAwarded = 0;
-      if (isCorrect) {
+      const hasWordSearchProgress = isWordSearch && (payload?.count > 0 || (payload?.foundWords && payload.foundWords.length > 0));
+
+      if (isCorrect || hasWordSearchProgress) {
         if (isWordBuilder) {
           const totalLetters =
             payload?.totalLetters !== undefined
@@ -455,6 +478,13 @@ export default function App() {
             payload?.totalMolePoints ??
             Math.max(0, ((payload?.correctCount || 0) * 10) - ((payload?.wrongCount || 0) * 10));
           pointsAwarded = basePoints + moleScore;
+        } else if (isWordSearch) {
+          const wordsToFind = (currentQ.content as any)?.words || [];
+          const totalWords = Math.max(1, wordsToFind.length);
+          const foundWords: string[] = payload?.foundWords || [];
+          const count = payload?.count ?? foundWords.length ?? (payload?.foundAll ? totalWords : 0);
+          const pointsPerWord = Math.max(10, Math.round(basePoints / totalWords));
+          pointsAwarded = count * pointsPerWord + (count === totalWords ? bonus : 0);
         } else {
           pointsAwarded = basePoints + bonus;
         }
@@ -467,7 +497,7 @@ export default function App() {
         playerId,
         playerName,
         submittedAt: Date.now(),
-        isCorrect,
+        isCorrect: isCorrect || hasWordSearchProgress,
         timeSpent,
         pointsAwarded,
         speedRank: existingSubmission?.speedRank || speedRank,
@@ -897,10 +927,12 @@ export default function App() {
       delete updatedPlayers[playerId];
       const updatedAnswers = { ...prev.answersThisTurn };
       delete updatedAnswers[playerId];
+      const kicked = Array.from(new Set([...(prev.kickedPlayerIds || []), playerId]));
       const updated: RoomState = {
         ...prev,
         players: updatedPlayers,
-        answersThisTurn: updatedAnswers
+        answersThisTurn: updatedAnswers,
+        kickedPlayerIds: kicked
       };
       firebaseSync.pushRoomState(updated);
       api.broadcastLocal(updated);
@@ -1003,33 +1035,52 @@ export default function App() {
             </div>
           </div>
 
-          {/* Mode Switcher: LIM vs Dispositivo Studente (Hidden if joined via QR code) */}
+          {/* Header Action Controls: Teacher Mode (LIM + CLASSIFICA GENERALE) vs Student Mode */}
           {!isLockedStudent ? (
-            <div className="flex items-center gap-2 bg-slate-950 p-1 rounded-2xl border border-slate-800">
-              <button
-                onClick={() => setViewRole('teacher')}
-                className={`px-3.5 py-1.5 rounded-xl text-xs font-black flex items-center gap-2 transition-all cursor-pointer ${
-                  viewRole === 'teacher'
-                    ? 'bg-gradient-to-r from-indigo-500 to-purple-600 text-white shadow-md'
-                    : 'text-slate-400 hover:text-slate-200'
-                }`}
-              >
-                <Monitor className="w-3.5 h-3.5" />
-                Schermo Docente (LIM)
-              </button>
+            viewRole === 'teacher' ? (
+              <div className="flex items-center gap-2 bg-slate-950 p-1 rounded-2xl border border-slate-800">
+                <div className="px-3.5 py-1.5 rounded-xl text-xs font-black flex items-center gap-2 bg-gradient-to-r from-indigo-500 to-purple-600 text-white shadow-md select-none">
+                  <Monitor className="w-3.5 h-3.5" />
+                  Schermo Docente (LIM)
+                </div>
 
-              <button
-                onClick={() => setViewRole('student')}
-                className={`px-3.5 py-1.5 rounded-xl text-xs font-black flex items-center gap-2 transition-all cursor-pointer ${
-                  viewRole === 'student'
-                    ? 'bg-gradient-to-r from-emerald-500 to-teal-600 text-white shadow-md'
-                    : 'text-slate-400 hover:text-slate-200'
-                }`}
-              >
-                <Smartphone className="w-3.5 h-3.5" />
-                Dispositivo Studente
-              </button>
-            </div>
+                <button
+                  type="button"
+                  onClick={() => setIsLeaderboardModalOpen(true)}
+                  className="px-3.5 py-1.5 rounded-xl text-xs font-black flex items-center gap-2 transition-all cursor-pointer bg-gradient-to-r from-amber-500 via-amber-400 to-yellow-500 hover:from-amber-400 hover:to-yellow-400 text-slate-950 shadow-md shadow-amber-500/20 active:scale-95"
+                  title="Visualizza la classifica generale live di tutta la classe"
+                >
+                  <Trophy className="w-3.5 h-3.5 fill-current" />
+                  CLASSIFICA GENERALE
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setIsTeacherCreatorOpen(true)}
+                  className="px-3.5 py-1.5 rounded-xl text-xs font-black flex items-center gap-1.5 transition-all cursor-pointer bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white shadow-md active:scale-95"
+                  title="Inserisci nuove domande nel quiz come docente"
+                >
+                  <PlusCircle className="w-3.5 h-3.5" />
+                  CREA DOMANDA
+                </button>
+              </div>
+            ) : (
+              <div className="flex items-center gap-2 bg-slate-950 p-1 rounded-2xl border border-slate-800">
+                <button
+                  type="button"
+                  onClick={() => setViewRole('teacher')}
+                  className="px-3.5 py-1.5 rounded-xl text-xs font-black flex items-center gap-2 transition-all cursor-pointer text-slate-400 hover:text-slate-200"
+                >
+                  <Monitor className="w-3.5 h-3.5" />
+                  Torna a Schermo Docente (LIM)
+                </button>
+
+                <div className="px-3.5 py-1.5 rounded-xl text-xs font-black flex items-center gap-2 bg-gradient-to-r from-emerald-500 to-teal-600 text-white shadow-md">
+                  <Smartphone className="w-3.5 h-3.5" />
+                  Dispositivo Studente
+                </div>
+              </div>
+            )
           ) : (
             <div className="flex items-center gap-2 px-3.5 py-1.5 rounded-xl bg-emerald-500/15 border border-emerald-500/30 text-emerald-300 text-xs font-black shadow-sm">
               <Smartphone className="w-3.5 h-3.5" />
@@ -1037,8 +1088,17 @@ export default function App() {
             </div>
           )}
 
-          {/* Firebase Connection & Guide Buttons */}
+          {/* Connected Students & Firebase Connection & Guide Buttons */}
           <div className="flex items-center gap-2">
+            {/* Studenti Connessi Badge right next to RTDB */}
+            <div
+              className="flex items-center gap-1.5 px-3 py-1 bg-slate-850 border border-slate-750 rounded-xl text-xs font-bold text-slate-300 shadow-sm select-none"
+              title="Studenti attualmente connessi alla sessione"
+            >
+              <Users className="w-3.5 h-3.5 text-emerald-400" />
+              <span>{Object.keys(roomState.players || {}).length} Studenti</span>
+            </div>
+
             {viewRole === 'teacher' ? (
               <div
                 className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-bold border select-none cursor-default ${
@@ -1131,6 +1191,175 @@ export default function App() {
         isOpen={isFirebaseModalOpen}
         onClose={() => setIsFirebaseModalOpen(false)}
       />
+
+      {/* Classifica Generale Modal (Docente & LIM) */}
+      {isLeaderboardModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-fade-in overflow-y-auto">
+          <div className="bg-slate-900 border border-slate-700 w-full max-w-2xl max-h-[90vh] rounded-3xl shadow-2xl flex flex-col overflow-hidden text-slate-100 my-auto">
+            {/* Modal Header */}
+            <div className="px-6 py-5 border-b border-slate-800 flex items-center justify-between bg-slate-950/80">
+              <div className="flex items-center gap-3">
+                <div className="p-3 bg-gradient-to-tr from-amber-400 via-yellow-500 to-amber-600 rounded-2xl text-slate-950 shadow-lg shadow-amber-500/20">
+                  <Trophy className="w-6 h-6 fill-current" />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <h2 className="text-xl font-black text-white">Classifica Generale</h2>
+                    <span className="px-2 py-0.5 rounded-full bg-amber-400/20 text-amber-300 text-[10px] font-black uppercase tracking-wider border border-amber-400/30">
+                      Live
+                    </span>
+                  </div>
+                  <p className="text-xs text-slate-400">
+                    Punteggi aggiornati in tempo reale per tutti gli studenti ({Object.keys(roomState.players || {}).length} partecipanti)
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setIsLeaderboardModalOpen(false)}
+                className="p-2 hover:bg-slate-800 text-slate-400 hover:text-white rounded-xl transition-colors cursor-pointer"
+                title="Chiudi classifica"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Leaderboard List */}
+            <div className="flex-1 overflow-y-auto p-6 space-y-3">
+              {(() => {
+                const sortedPlayers = Object.values(roomState.players || {}).sort(
+                  (a, b) => b.score - a.score || b.streak - a.streak
+                );
+
+                if (sortedPlayers.length === 0) {
+                  return (
+                    <div className="p-12 text-center text-slate-500 bg-slate-950/60 rounded-2xl border border-dashed border-slate-800">
+                      <p className="font-semibold text-sm">Nessuno studente ancora collegato.</p>
+                      <p className="text-xs text-slate-600 mt-1">
+                        Inquadra il QR code per accedere o aggiungi un Bot dal pannello di controllo.
+                      </p>
+                    </div>
+                  );
+                }
+
+                return sortedPlayers.map((player, index) => {
+                  const rank = index + 1;
+                  const medal = rank === 1 ? '🥇' : rank === 2 ? '🥈' : rank === 3 ? '🥉' : `#${rank}`;
+                  const cardBorder =
+                    rank === 1
+                      ? 'border-amber-400/60 bg-gradient-to-r from-amber-500/15 via-slate-900 to-slate-900 shadow-amber-500/10'
+                      : rank === 2
+                      ? 'border-slate-300/50 bg-gradient-to-r from-slate-400/15 via-slate-900 to-slate-900'
+                      : rank === 3
+                      ? 'border-amber-700/50 bg-gradient-to-r from-amber-700/15 via-slate-900 to-slate-900'
+                      : 'border-slate-800 bg-slate-950/70 hover:border-slate-700';
+
+                  return (
+                    <div
+                      key={player.id}
+                      className={`p-4 rounded-2xl border flex items-center justify-between gap-4 transition-all shadow-md ${cardBorder}`}
+                    >
+                      <div className="flex items-center gap-3.5">
+                        <div
+                          className={`w-10 h-10 rounded-2xl font-black text-sm flex items-center justify-center shrink-0 shadow-sm ${
+                            rank === 1
+                              ? 'bg-amber-400 text-slate-950 text-lg'
+                              : rank === 2
+                              ? 'bg-slate-300 text-slate-950 text-lg'
+                              : rank === 3
+                              ? 'bg-amber-700 text-white text-lg'
+                              : 'bg-slate-800 text-slate-400'
+                          }`}
+                        >
+                          {medal}
+                        </div>
+
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <span className="text-xl">{player.avatar}</span>
+                            <span className="font-black text-white text-base">{player.name}</span>
+                            {player.isSimulated && (
+                              <span className="text-[10px] text-slate-400 font-mono px-1.5 py-0.5 rounded bg-slate-800 border border-slate-700">
+                                Bot
+                              </span>
+                            )}
+                          </div>
+                          {player.streak > 1 && (
+                            <div className="flex items-center gap-1 text-[11px] font-bold text-amber-400 mt-0.5">
+                              <Flame className="w-3.5 h-3.5 fill-amber-400 text-amber-400 animate-pulse" />
+                              <span>Striscia di {player.streak} risposte esatte!</span>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="text-right">
+                        <div className="text-2xl font-black font-mono text-amber-300">
+                          {player.score} <span className="text-xs text-slate-400 font-sans font-bold">pt</span>
+                        </div>
+                        <div className="text-[11px] text-slate-400">
+                          {rank === 1 ? 'Capoclassifica' : `${rank}° Posizione`}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                });
+              })()}
+            </div>
+
+            {/* Modal Footer */}
+            <div className="px-6 py-4 bg-slate-950/80 border-t border-slate-800 flex items-center justify-between">
+              <span className="text-xs text-slate-400">
+                Stanza: <strong className="text-amber-300 font-mono">{roomState.roomCode}</strong> • {roomState.roomName}
+              </span>
+              <button
+                onClick={() => setIsLeaderboardModalOpen(false)}
+                className="px-5 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-white font-bold text-xs transition-colors cursor-pointer"
+              >
+                Chiudi
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Teacher Question Creator Modal */}
+      {isTeacherCreatorOpen && (
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto animate-fade-in">
+          <div className="bg-slate-900 border border-slate-750 rounded-3xl max-w-4xl w-full max-h-[92vh] flex flex-col shadow-2xl relative my-6 overflow-hidden">
+            <div className="flex items-center justify-between p-5 border-b border-slate-800 bg-slate-950">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-2xl bg-indigo-600/30 border border-indigo-500/50 flex items-center justify-center text-xl shadow-inner">
+                  ✍️
+                </div>
+                <div>
+                  <h3 className="font-black text-lg text-white">Inserisci Domanda come Docente</h3>
+                  <p className="text-xs text-slate-400">
+                    Crea una o più domande per arricchire la sfida della classe live
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setIsTeacherCreatorOpen(false)}
+                className="p-2 rounded-xl text-slate-400 hover:text-white hover:bg-slate-800 transition-colors cursor-pointer"
+                title="Chiudi editor domande"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="p-6 overflow-y-auto flex-1">
+              <QuestionCreator
+                creatorName="Docente"
+                onSubmitQuestion={(q) => {
+                  handleSubmitQuestion(q);
+                  alert('Domanda docente aggiunta con successo al repository della classe! Puoi inserirne altre o chiudere questa finestra.');
+                }}
+                onCancel={() => setIsTeacherCreatorOpen(false)}
+              />
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

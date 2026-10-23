@@ -485,7 +485,8 @@ export const StudentDevice: React.FC<StudentDeviceProps> = ({
               currentQ.type === 'draw_vote' ||
               currentQ.type === 'word_builder' ||
               currentQ.type === 'longest_word' ||
-              currentQ.type === 'mole_whack';
+              currentQ.type === 'mole_whack' ||
+              currentQ.type === 'word_search';
 
             return (
               <>
@@ -534,6 +535,16 @@ export const StudentDevice: React.FC<StudentDeviceProps> = ({
                 ) : currentQ.type === 'mole_whack' ? (
                   <div className="p-3 bg-slate-900 border border-slate-800 rounded-2xl text-center text-xs text-slate-300">
                     Becca le talpe con la categoria indicata in alto fino allo scadere del tempo!
+                  </div>
+                ) : currentQ.type === 'word_search' ? (
+                  <div className="p-3 bg-slate-900 border border-slate-800 rounded-2xl text-center text-xs text-slate-300">
+                    {myAnswer && myAnswer.answerPayload?.foundWords?.length > 0 ? (
+                      <span className="text-emerald-300 font-bold">
+                        Parole trovate finora: {myAnswer.answerPayload.foundWords.length} su {myAnswer.answerPayload.totalWords || (currentQ.content as any)?.words?.length || 4} (+{myAnswer.pointsAwarded} pt)! Continua a cercare prima dello scadere del tempo!
+                      </span>
+                    ) : (
+                      'Tocca le lettere per trovare le parole nascoste. Ricevi punti per ciascuna parola scovata!'
+                    )}
                   </div>
                 ) : myAnswer ? (
                   <div className="p-4 bg-emerald-500/20 border-2 border-emerald-500/60 rounded-2xl text-center text-sm font-black text-emerald-300 flex items-center justify-center gap-2 animate-bounce shadow-xl">

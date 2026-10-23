@@ -213,4 +213,5 @@ export interface RoomState {
   turnDuration: number;
   settings: RoomSettings;
   resetEpoch?: number;
+  kickedPlayerIds?: string[];
 }

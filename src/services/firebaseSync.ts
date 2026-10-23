@@ -161,6 +161,7 @@ export function sanitizeRoomState(data: any, fallback?: RoomState): RoomState {
     turnStartTime: typeof data.turnStartTime === 'number' ? data.turnStartTime : 0,
     turnDuration: typeof data.turnDuration === 'number' ? data.turnDuration : 25,
     resetEpoch: typeof data.resetEpoch === 'number' ? data.resetEpoch : fallback?.resetEpoch,
+    kickedPlayerIds: Array.isArray(data.kickedPlayerIds) ? data.kickedPlayerIds : (fallback?.kickedPlayerIds || []),
     settings: {
       basePoints: data.settings?.basePoints ?? fallback?.settings?.basePoints ?? 50,
       fastFingerBonus1: data.settings?.fastFingerBonus1 ?? fallback?.settings?.fastFingerBonus1 ?? 20,
@@ -302,12 +303,6 @@ export const firebaseSync = {
     try {
       const playerRef = ref(rtdb, `rooms/${cleanCode}/players/${player.id}`);
       await set(playerRef, cleanPayload(player));
-      try {
-        // Automatically remove player when tab is closed / connection lost
-        onDisconnect(playerRef).remove();
-      } catch (discErr) {
-        console.warn('onDisconnect hook note:', discErr);
-      }
       notifyConnectionChange(true);
       return true;
     } catch (e) {
