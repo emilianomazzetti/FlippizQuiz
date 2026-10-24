@@ -226,4 +226,5 @@ export interface RoomState {
   kickedPlayerIds?: string[];
   deletedQuestionIds?: string[];
   teacherClosed?: boolean;
+  showQuestionToStudents?: boolean;
 }

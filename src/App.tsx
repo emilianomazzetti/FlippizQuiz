@@ -67,7 +67,6 @@ export default function App() {
   const [isFirebaseOnline, setIsFirebaseOnline] = useState<boolean>(false);
   const [isLeaderboardModalOpen, setIsLeaderboardModalOpen] = useState<boolean>(false);
   const [isTeacherCreatorOpen, setIsTeacherCreatorOpen] = useState<boolean>(false);
-  const [showQuestionToStudents, setShowQuestionToStudents] = useState<boolean>(false);
 
   // Fullscreen support for tablet devices and LIM
   const { isFullscreen: isAppFs, toggle: toggleAppFs } = useFullscreen();
@@ -121,7 +120,8 @@ export default function App() {
       fastFingerBonus3: 10,
       defaultTimeLimit: 25,
       soundEnabled: true
-    }
+    },
+    showQuestionToStudents: false
   });
 
   const timerRef = useRef<NodeJS.Timeout | null>(null);
@@ -1312,8 +1312,16 @@ export default function App() {
                 <label className="flex items-center gap-2 px-3.5 py-1.5 rounded-xl bg-slate-800 text-xs font-bold text-slate-300 cursor-pointer hover:bg-slate-750 transition-colors">
                   <input
                     type="checkbox"
-                    checked={showQuestionToStudents}
-                    onChange={(e) => setShowQuestionToStudents(e.target.checked)}
+                    checked={!!roomState.showQuestionToStudents}
+                    onChange={(e) => {
+                      const show = e.target.checked;
+                      setRoomState((prev) => {
+                        const updated = { ...prev, showQuestionToStudents: show };
+                        api.broadcastLocal(updated);
+                        firebaseSync.pushRoomState(updated);
+                        return updated;
+                      });
+                    }}
                     className="accent-indigo-500 w-4 h-4 rounded"
                   />
                   VEDI DOMANDE
@@ -1538,7 +1546,7 @@ export default function App() {
             onSubmitAnswer={handleSubmitAnswer}
             onSaveDrawing={handleSaveDrawing}
             onVoteDrawing={handleVoteDrawing}
-            showQuestionToStudents={showQuestionToStudents}
+            showQuestionToStudents={roomState.showQuestionToStudents}
           />
         )}
       </main>
