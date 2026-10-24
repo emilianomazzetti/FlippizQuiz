@@ -258,7 +258,7 @@ export const QuestionCreator: React.FC<QuestionCreatorProps> = ({
   const [puzzleGridSize, setPuzzleGridSize] = useState<2 | 3 | 4 | 5>(2);
 
   // Word Search
-  const [wordSearchList, setWordSearchList] = useState<string>('ROMA, SOLE, MARE, LUNA');
+  const [wordSearchList, setWordSearchList] = useState<string>('');
 
   // Math Challenge
   const [mathOps, setMathOps] = useState<('+' | '-' | '*' | '/')[]>(['+', '-']);
@@ -1368,14 +1368,14 @@ export const QuestionCreator: React.FC<QuestionCreatorProps> = ({
           {selectedType === 'word_search' && (
             <div className="space-y-3">
               <p className="text-xs text-slate-400">
-                Inserisci le parole da nascondere nella griglia, separate da virgola (3-5 parole consigliate):
+                Inserisci le parole da nascondere nella griglia, separate da virgola (minimo 1):
               </p>
               <input
                 type="text"
                 required
                 value={wordSearchList}
                 onChange={(e) => setWordSearchList(e.target.value.toUpperCase())}
-                placeholder="Es. ROMA, SOLE, MARE, LUNA"
+                placeholder="Inserisci parole (es. SCIENZE, STORIA)"
                 className="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-2.5 text-sm font-bold text-white uppercase"
               />
             </div>

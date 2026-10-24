@@ -1438,6 +1438,7 @@ export const TeacherMonitor: React.FC<TeacherMonitorProps> = ({
 
             {/* Correct Answer & User Submissions Sharing */}
             <div className="bg-slate-900 border border-slate-800 p-8 rounded-3xl shadow-2xl space-y-6">
+              {renderActiveQuestionBoard(currentQ)}
               {renderCorrectAnswerSummary()}
 
               <div>

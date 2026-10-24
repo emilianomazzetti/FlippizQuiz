@@ -1,6 +1,6 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useRef } from 'react';
 import { WordSearchContent } from '../../types/quiz';
-import { Check, CheckCircle2 } from 'lucide-react';
+import { Check } from 'lucide-react';
 import { generateWordSearchGrid } from '../../utils/wordSearchGenerator';
 
 interface WordSearchPlayerProps {
@@ -26,20 +26,14 @@ export const WordSearchPlayer: React.FC<WordSearchPlayerProps> = ({
   const [foundWords, setFoundWords] = useState<string[]>([]);
   const [foundCoords, setFoundCoords] = useState<{ r: number; c: number; word: string }[]>([]);
 
-  const toggleSelect = (r: number, c: number) => {
-    if (disabled) return;
-    const exists = selectedCoords.some((coord) => coord.r === r && coord.c === c);
-    let newCoords: { r: number; c: number }[] = [];
+  // Drag / Swipe selection state
+  const [isDragging, setIsDragging] = useState(false);
+  const gridRef = useRef<HTMLDivElement | null>(null);
 
-    if (exists) {
-      newCoords = selectedCoords.filter((coord) => !(coord.r === r && coord.c === c));
-    } else {
-      newCoords = [...selectedCoords, { r, c }];
-    }
-    setSelectedCoords(newCoords);
+  const evaluateCoords = (coords: { r: number; c: number }[]) => {
+    if (coords.length === 0 || disabled) return;
 
-    // Check if the current selection forms one of the words to find
-    const wordFormed = newCoords.map((coord) => grid[coord.r][coord.c]).join('');
+    const wordFormed = coords.map((coord) => grid[coord.r][coord.c]).join('');
     const revFormed = wordFormed.split('').reverse().join('');
 
     const matchedWord = wordsToFind.find(
@@ -51,17 +45,58 @@ export const WordSearchPlayer: React.FC<WordSearchPlayerProps> = ({
       setFoundWords(nextFound);
       setFoundCoords((prev) => [
         ...prev,
-        ...newCoords.map((coord) => ({ ...coord, word: matchedWord }))
+        ...coords.map((coord) => ({ ...coord, word: matchedWord }))
       ]);
       setSelectedCoords([]);
 
-      // Inform parent about each word found immediately (+5 pt for each word found!)
       onAnswer(nextFound.length > 0, {
         foundWords: nextFound,
         totalWords: wordsToFind.length,
         count: nextFound.length,
         foundAll: nextFound.length === wordsToFind.length
       });
+    } else {
+      setSelectedCoords([]);
+    }
+  };
+
+  const handleCellPointerDown = (r: number, c: number, e: React.PointerEvent) => {
+    if (disabled || isCoordFound(r, c)) return;
+    setIsDragging(true);
+    (e.target as HTMLElement).setPointerCapture(e.pointerId);
+    setSelectedCoords([{ r, c }]);
+  };
+
+  const handleCellPointerEnter = (r: number, c: number) => {
+    if (!isDragging || disabled || isCoordFound(r, c)) return;
+    // Prevent duplicates in path
+    if (!selectedCoords.some((coord) => coord.r === r && coord.c === c)) {
+      setSelectedCoords((prev) => [...prev, { r, c }]);
+    }
+  };
+
+  const handlePointerUp = () => {
+    if (!isDragging) return;
+    setIsDragging(false);
+    evaluateCoords(selectedCoords);
+  };
+
+  // Fallback click selection for accessibility or tap-by-tap
+  const handleCellClick = (r: number, c: number) => {
+    if (disabled || isCoordFound(r, c) || isDragging) return;
+    const exists = selectedCoords.some((coord) => coord.r === r && coord.c === c);
+    let newCoords: { r: number; c: number }[] = [];
+
+    if (exists) {
+      newCoords = selectedCoords.filter((coord) => !(coord.r === r && coord.c === c));
+    } else {
+      newCoords = [...selectedCoords, { r, c }];
+    }
+    setSelectedCoords(newCoords);
+
+    // Evaluate on click if at least 2-3 letters
+    if (newCoords.length >= 2) {
+      evaluateCoords(newCoords);
     }
   };
 
@@ -70,21 +105,24 @@ export const WordSearchPlayer: React.FC<WordSearchPlayerProps> = ({
   };
 
   const isCoordSelected = (r: number, c: number) => {
-    return selectedCoords.some((sc) => sc.r === r && sc.c === c);
+    return selectedCoords.some((sc) => sc.r === sc.r && sc.r === r && sc.c === c);
   };
 
   return (
-    <div className="w-full max-w-3xl mx-auto flex flex-col gap-6">
+    <div className="w-full max-w-3xl mx-auto flex flex-col gap-6 select-none touch-none">
       <div className="text-center">
         <p className="text-sm font-semibold text-indigo-400 uppercase tracking-wider">
-          Trova le parole nascoste toccando le lettere in sequenza (Ricevi punti per ogni parola trovata!)
+          Trascina il dito o clicca le lettere in sequenza per trovare le parole nascoste (+5 pt a parola!)
         </p>
       </div>
 
       <div className="flex flex-col md:flex-row gap-6 items-center justify-center">
         {/* Letter Grid */}
         <div
-          className="grid gap-1.5 p-3 bg-slate-900 border-2 border-slate-700 rounded-3xl shadow-2xl select-none"
+          ref={gridRef}
+          onPointerUp={handlePointerUp}
+          onPointerLeave={handlePointerUp}
+          className="grid gap-1.5 p-3.5 bg-slate-900 border-2 border-slate-700 rounded-3xl shadow-2xl select-none"
           style={{
             gridTemplateColumns: `repeat(${gridSize}, minmax(0, 1fr))`
           }}
@@ -92,31 +130,31 @@ export const WordSearchPlayer: React.FC<WordSearchPlayerProps> = ({
           {grid.map((row, r) =>
             row.map((char, c) => {
               const found = isCoordFound(r, c);
-              const selected = isCoordSelected(r, c);
+              const selected = selectedCoords.some((sc) => sc.r === r && sc.c === c);
 
               return (
-                <button
+                <div
                   key={`${r}-${c}`}
-                  type="button"
-                  disabled={disabled || found}
-                  onClick={() => toggleSelect(r, c)}
-                  className={`w-9 h-9 md:w-11 md:h-11 rounded-xl font-black text-sm md:text-base flex items-center justify-center transition-all ${
+                  onPointerDown={(e) => handleCellPointerDown(r, c, e)}
+                  onPointerEnter={() => handleCellPointerEnter(r, c)}
+                  onClick={() => handleCellClick(r, c)}
+                  className={`w-10 h-10 md:w-12 md:h-12 rounded-2xl font-black text-base md:text-lg flex items-center justify-center transition-all cursor-pointer ${
                     found
-                      ? 'bg-emerald-500 text-slate-950 ring-2 ring-emerald-300 font-black'
+                      ? 'bg-emerald-500 text-slate-950 ring-2 ring-emerald-300 font-black shadow-md'
                       : selected
-                      ? 'bg-indigo-600 text-white ring-2 ring-indigo-400 scale-105'
-                      : 'bg-slate-800 text-slate-200 hover:bg-slate-700 border border-slate-700/60'
+                      ? 'bg-indigo-600 text-white ring-4 ring-indigo-400/50 scale-105 shadow-lg'
+                      : 'bg-slate-800 text-slate-100 hover:bg-slate-750 border border-slate-700/80 shadow'
                   }`}
                 >
                   {char}
-                </button>
+                </div>
               );
             })
           )}
         </div>
 
         {/* Word Targets List */}
-        <div className="bg-slate-800/80 p-5 rounded-3xl border border-slate-700 w-full md:w-56 flex flex-col gap-3">
+        <div className="bg-slate-900 p-5 rounded-3xl border border-slate-800 w-full md:w-60 flex flex-col gap-3 shadow-xl">
           <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider">
             Parole da trovare:
           </h4>
@@ -126,10 +164,10 @@ export const WordSearchPlayer: React.FC<WordSearchPlayerProps> = ({
               return (
                 <div
                   key={word}
-                  className={`px-3 py-2 rounded-xl text-sm font-black flex items-center justify-between transition-all ${
+                  className={`px-3.5 py-2.5 rounded-xl text-sm font-black flex items-center justify-between transition-all ${
                     isFound
-                      ? 'bg-emerald-500/20 text-emerald-300 line-through border border-emerald-500/40'
-                      : 'bg-slate-900/60 text-white border border-slate-800'
+                      ? 'bg-emerald-500/20 text-emerald-300 line-through border border-emerald-500/40 shadow-inner'
+                      : 'bg-slate-950 text-white border border-slate-800/80'
                   }`}
                 >
                   <span>{word}</span>
@@ -140,7 +178,7 @@ export const WordSearchPlayer: React.FC<WordSearchPlayerProps> = ({
           </div>
 
           <div className="text-center text-xs text-slate-400 mt-2 font-bold">
-            Trovate: <span className="text-emerald-400 font-black">{foundWords.length}</span> su {wordsToFind.length}
+            Trovate: <span className="text-emerald-400 font-black text-sm">{foundWords.length}</span> su {wordsToFind.length}
           </div>
         </div>
       </div>
