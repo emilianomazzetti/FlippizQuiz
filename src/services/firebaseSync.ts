@@ -771,5 +771,20 @@ export const firebaseSync = {
       console.warn('clearGlobalLeaderboard error:', e);
       return false;
     }
+  },
+
+  // Remove a specific student from global leaderboard
+  async removeGlobalScore(playerName: string): Promise<boolean> {
+    const cleanKey = getGlobalKey(playerName);
+    if (!cleanKey) return false;
+    try {
+      const globalRef = ref(rtdb, `globalLeaderboard/${cleanKey}`);
+      await remove(globalRef);
+      notifyConnectionChange(true);
+      return true;
+    } catch (e) {
+      console.warn('removeGlobalScore Firebase error:', e);
+      return false;
+    }
   }
 };
