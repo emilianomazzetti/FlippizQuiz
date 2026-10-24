@@ -225,9 +225,14 @@ export const WordSearchPlayer: React.FC<WordSearchPlayerProps> = ({
             })}
           </div>
 
-          <div className="text-center text-xs text-slate-400 mt-2 font-bold flex items-center justify-center gap-1.5">
-            <Sparkles className="w-3.5 h-3.5 text-amber-400" />
-            <span>+5 punti per ogni parola trovata</span>
+          <div className="text-center text-xs text-slate-400 mt-2 font-bold flex flex-col items-center justify-center gap-1">
+            <div className="flex items-center gap-1.5 text-amber-300">
+              <Sparkles className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+              <span>+5 pt per ogni parola trovata</span>
+            </div>
+            <div className="text-[11px] text-emerald-400 font-semibold">
+              🏆 Risolvi tutte le parole per sbloccare i punti di default della domanda!
+            </div>
           </div>
         </div>
       </div>

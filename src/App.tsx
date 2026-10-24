@@ -5,7 +5,8 @@ import {
   Player,
   AnswerSubmission,
   DrawingSubmission,
-  GamePhase
+  GamePhase,
+  GlobalPlayerScore
 } from './types/quiz';
 import { INITIAL_QUESTIONS } from './data/initialQuestions';
 import { TeacherMonitor } from './components/TeacherMonitor';
@@ -38,7 +39,10 @@ import {
   Settings,
   Volume2,
   VolumeX,
-  Volume1
+  Volume1,
+  Download,
+  Trash2,
+  RotateCcw
 } from 'lucide-react';
 import { useFullscreen } from './utils/fullscreen';
 
@@ -173,8 +177,23 @@ export default function App() {
           }));
         }
       }
+
+      // Restore cumulative global leaderboard across all FlipQuizLive sessions
+      const savedGlobal = localStorage.getItem('flipquiz_global_scores');
+      if (savedGlobal) {
+        const parsedGlobal = JSON.parse(savedGlobal);
+        if (parsedGlobal && typeof parsedGlobal === 'object') {
+          setRoomState((prev) => ({
+            ...prev,
+            globalScores: {
+              ...(prev.globalScores || {}),
+              ...parsedGlobal
+            }
+          }));
+        }
+      }
     } catch (e) {
-      console.warn('Could not read saved player/config from storage:', e);
+      console.warn('Could not read saved player/config/globalScores from storage:', e);
     }
 
     // 2. Listen to Firebase connection state
@@ -338,6 +357,15 @@ export default function App() {
     }
   }, [activeStudent?.score, activeStudent?.streak]);
 
+  // Persist cumulative global leaderboard across all FlipQuizLive sessions
+  useEffect(() => {
+    if (roomState.globalScores && Object.keys(roomState.globalScores).length > 0) {
+      try {
+        localStorage.setItem('flipquiz_global_scores', JSON.stringify(roomState.globalScores));
+      } catch (e) {}
+    }
+  }, [roomState.globalScores]);
+
   // Automatically transition from question_intro (3 seconds) to question_active
   useEffect(() => {
     if (roomState.phase === 'question_intro') {
@@ -421,6 +449,7 @@ export default function App() {
     setRoomState((prev) => {
       let finalAnswers = { ...prev.answersThisTurn };
       let finalPlayers = { ...prev.players };
+      let updatedGlobal = { ...(prev.globalScores || {}) };
 
       // For "La Parola Più Lunga": award +25 points to whoever created the longest word
       if (currentQ && currentQ.type === 'longest_word') {
@@ -455,6 +484,20 @@ export default function App() {
                       ...pl,
                       score: pl.score + 25
                     };
+
+                    const globalKey = pl.name.trim().toLowerCase();
+                    const existingGlobal = updatedGlobal[globalKey] || {
+                      name: pl.name,
+                      avatar: pl.avatar,
+                      totalScore: 0,
+                      gamesPlayed: 1,
+                      lastActive: Date.now()
+                    };
+                    updatedGlobal[globalKey] = {
+                      ...existingGlobal,
+                      totalScore: (existingGlobal.totalScore || 0) + 25,
+                      lastActive: Date.now()
+                    };
                   }
                 }
               }
@@ -482,6 +525,7 @@ export default function App() {
         ...prev,
         answersThisTurn: finalAnswers,
         players: finalPlayers,
+        globalScores: updatedGlobal,
         phase: nextPhase
       };
       api.broadcastLocal(updated);
@@ -552,7 +596,14 @@ export default function App() {
       if (isWordSearch) {
         const foundWords: string[] = payload?.foundWords || [];
         const count = payload?.count ?? foundWords.length ?? 0;
-        pointsAwarded = count * 5;
+        const totalWords =
+          payload?.totalWords || (currentQ?.content as any)?.words?.length || 0;
+        const foundAll =
+          payload?.foundAll || (totalWords > 0 && count >= totalWords);
+
+        const wordPoints = count * 5;
+        const questionBasePoints = foundAll ? basePoints : 0;
+        pointsAwarded = wordPoints + questionBasePoints;
         roundPassed = count > 0;
       } else if (isCorrect) {
         if (isWordBuilder) {
@@ -617,10 +668,32 @@ export default function App() {
         }
       };
 
+      // Accumulate scoreDelta in global scores (tracked across all FlipQuizLive sessions)
+      const globalKey = playerName.trim().toLowerCase();
+      const existingGlobal = prev.globalScores?.[globalKey] || {
+        name: playerName,
+        avatar: existingPlayer.avatar || '🚀',
+        totalScore: 0,
+        gamesPlayed: 1,
+        lastActive: Date.now()
+      };
+
+      const updatedGlobal = {
+        ...(prev.globalScores || {}),
+        [globalKey]: {
+          ...existingGlobal,
+          name: playerName,
+          avatar: existingPlayer.avatar || existingGlobal.avatar || '🚀',
+          totalScore: Math.max(0, (existingGlobal.totalScore || 0) + scoreDelta),
+          lastActive: Date.now()
+        }
+      };
+
       const updatedState: RoomState = {
         ...prev,
         answersThisTurn: updatedAnswers,
-        players: updatedPlayers
+        players: updatedPlayers,
+        globalScores: updatedGlobal
       };
 
       api.broadcastLocal(updatedState);
@@ -669,12 +742,32 @@ export default function App() {
     } catch (e) {}
 
     setRoomState((prev) => {
+      const globalKey = cleanName.toLowerCase();
+      const existingGlobal = prev.globalScores?.[globalKey] || {
+        name: cleanName,
+        avatar,
+        totalScore: 0,
+        gamesPlayed: 1,
+        lastActive: Date.now()
+      };
+
+      const updatedGlobal = {
+        ...(prev.globalScores || {}),
+        [globalKey]: {
+          ...existingGlobal,
+          name: cleanName,
+          avatar,
+          lastActive: Date.now()
+        }
+      };
+
       const updated: RoomState = {
         ...prev,
         players: {
           ...prev.players,
           [newPlayerId]: newPlayer
-        }
+        },
+        globalScores: updatedGlobal
       };
       api.broadcastLocal(updated);
       return updated;
@@ -771,6 +864,8 @@ export default function App() {
 
       // Award +25 points to artist for each star received
       const artist = prev.players[targetPlayerId];
+      let updatedGlobal = prev.globalScores || {};
+
       const updatedPlayers = artist
         ? {
             ...prev.players,
@@ -781,9 +876,29 @@ export default function App() {
           }
         : prev.players;
 
+      if (artist) {
+        const globalKey = artist.name.trim().toLowerCase();
+        const existingGlobal = updatedGlobal[globalKey] || {
+          name: artist.name,
+          avatar: artist.avatar,
+          totalScore: 0,
+          gamesPlayed: 1,
+          lastActive: Date.now()
+        };
+        updatedGlobal = {
+          ...updatedGlobal,
+          [globalKey]: {
+            ...existingGlobal,
+            totalScore: (existingGlobal.totalScore || 0) + 25,
+            lastActive: Date.now()
+          }
+        };
+      }
+
       const updated: RoomState = {
         ...prev,
         players: updatedPlayers,
+        globalScores: updatedGlobal,
         drawingsThisTurn: {
           ...prev.drawingsThisTurn,
           [targetPlayerId]: {
@@ -807,7 +922,25 @@ export default function App() {
     const duration = roomState.questions[0]?.timeLimit || 25;
 
     setRoomState((prev) => {
-      // Reset all students' score and streak to 0 on new quiz!
+      // Increment gamesPlayed for all currently connected students in globalScores
+      const updatedGlobal = { ...(prev.globalScores || {}) };
+      Object.values(prev.players || {}).forEach((p) => {
+        const key = p.name.trim().toLowerCase();
+        const existing = updatedGlobal[key] || {
+          name: p.name,
+          avatar: p.avatar,
+          totalScore: p.score || 0,
+          gamesPlayed: 0,
+          lastActive: Date.now()
+        };
+        updatedGlobal[key] = {
+          ...existing,
+          gamesPlayed: (existing.gamesPlayed || 0) + 1,
+          lastActive: Date.now()
+        };
+      });
+
+      // Reset all students' score and streak to 0 on new quiz session!
       const resetPlayers = Object.fromEntries(
         Object.entries(prev.players || {}).map(([id, p]) => [
           id,
@@ -822,6 +955,7 @@ export default function App() {
       const updated: RoomState = {
         ...prev,
         players: resetPlayers,
+        globalScores: updatedGlobal,
         phase: 'question_intro',
         currentQuestionIndex: 0,
         answersThisTurn: {},
@@ -1393,7 +1527,7 @@ export default function App() {
       {/* Classifica Generale Modal (Docente & LIM) */}
       {isLeaderboardModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-fade-in overflow-y-auto">
-          <div className="bg-slate-900 border border-slate-700 w-full max-w-2xl max-h-[90vh] rounded-3xl shadow-2xl flex flex-col overflow-hidden text-slate-100 my-auto">
+          <div className="bg-slate-900 border border-slate-700 w-full max-w-3xl max-h-[92vh] rounded-3xl shadow-2xl flex flex-col overflow-hidden text-slate-100 my-auto">
             {/* Modal Header */}
             <div className="px-6 py-5 border-b border-slate-800 flex items-center justify-between bg-slate-950/80">
               <div className="flex items-center gap-3">
@@ -1402,13 +1536,13 @@ export default function App() {
                 </div>
                 <div>
                   <div className="flex items-center gap-2">
-                    <h2 className="text-xl font-black text-white">Classifica Generale</h2>
+                    <h2 className="text-xl font-black text-white">Classifica Generale Cumulativa</h2>
                     <span className="px-2 py-0.5 rounded-full bg-amber-400/20 text-amber-300 text-[10px] font-black uppercase tracking-wider border border-amber-400/30">
-                      Live
+                      Tutti i FlipQuizLive
                     </span>
                   </div>
                   <p className="text-xs text-slate-400">
-                    Punteggi aggiornati in tempo reale per tutti gli studenti ({Object.keys(roomState.players || {}).length} partecipanti)
+                    Punti cumulativi raccolti dagli studenti in tutte le sessioni di gioco
                   </p>
                 </div>
               </div>
@@ -1422,99 +1556,253 @@ export default function App() {
             </div>
 
             {/* Leaderboard List */}
-            <div className="flex-1 overflow-y-auto p-6 space-y-3">
+            <div className="flex-1 overflow-y-auto p-6 space-y-4">
               {(() => {
-                const sortedPlayers = Object.values(roomState.players || {}).sort(
-                  (a, b) => b.score - a.score || b.streak - a.streak
+                // Build merged global list of all students across sessions
+                const allMap: Record<string, {
+                  name: string;
+                  avatar: string;
+                  totalScore: number;
+                  sessionScore: number;
+                  gamesPlayed: number;
+                  isSimulated?: boolean;
+                }> = {};
+
+                // 1. Populate from globalScores
+                Object.values(roomState.globalScores || {}).forEach((g) => {
+                  const key = g.name.trim().toLowerCase();
+                  allMap[key] = {
+                    name: g.name,
+                    avatar: g.avatar,
+                    totalScore: g.totalScore || 0,
+                    sessionScore: 0,
+                    gamesPlayed: g.gamesPlayed || 1
+                  };
+                });
+
+                // 2. Merge with current session players
+                Object.values(roomState.players || {}).forEach((p) => {
+                  const key = p.name.trim().toLowerCase();
+                  if (allMap[key]) {
+                    allMap[key].sessionScore = p.score || 0;
+                    allMap[key].avatar = p.avatar || allMap[key].avatar;
+                    if (p.isSimulated) allMap[key].isSimulated = true;
+                  } else {
+                    allMap[key] = {
+                      name: p.name,
+                      avatar: p.avatar,
+                      totalScore: p.score || 0,
+                      sessionScore: p.score || 0,
+                      gamesPlayed: 1,
+                      isSimulated: p.isSimulated
+                    };
+                  }
+                });
+
+                const sortedGlobal = Object.values(allMap).sort(
+                  (a, b) => b.totalScore - a.totalScore || b.sessionScore - a.sessionScore
                 );
 
-                if (sortedPlayers.length === 0) {
+                if (sortedGlobal.length === 0) {
                   return (
                     <div className="p-12 text-center text-slate-500 bg-slate-950/60 rounded-2xl border border-dashed border-slate-800">
-                      <p className="font-semibold text-sm">Nessuno studente ancora collegato.</p>
+                      <p className="font-semibold text-sm">Nessuno studente ancora registrato nella classifica generale.</p>
                       <p className="text-xs text-slate-600 mt-1">
-                        Inquadra il QR code per accedere o aggiungi un Bot dal pannello di controllo.
+                        Inquadra il QR code per accedere e accumula punti partecipando alle sfide FlipQuizLive!
                       </p>
                     </div>
                   );
                 }
 
-                return sortedPlayers.map((player, index) => {
-                  const rank = index + 1;
-                  const medal = rank === 1 ? '🥇' : rank === 2 ? '🥈' : rank === 3 ? '🥉' : `#${rank}`;
-                  const cardBorder =
-                    rank === 1
-                      ? 'border-amber-400/60 bg-gradient-to-r from-amber-500/15 via-slate-900 to-slate-900 shadow-amber-500/10'
-                      : rank === 2
-                      ? 'border-slate-300/50 bg-gradient-to-r from-slate-400/15 via-slate-900 to-slate-900'
-                      : rank === 3
-                      ? 'border-amber-700/50 bg-gradient-to-r from-amber-700/15 via-slate-900 to-slate-900'
-                      : 'border-slate-800 bg-slate-950/70 hover:border-slate-700';
-
-                  return (
-                    <div
-                      key={player.id}
-                      className={`p-4 rounded-2xl border flex items-center justify-between gap-4 transition-all shadow-md ${cardBorder}`}
-                    >
-                      <div className="flex items-center gap-3.5">
-                        <div
-                          className={`w-10 h-10 rounded-2xl font-black text-sm flex items-center justify-center shrink-0 shadow-sm ${
-                            rank === 1
-                              ? 'bg-amber-400 text-slate-950 text-lg'
-                              : rank === 2
-                              ? 'bg-slate-300 text-slate-950 text-lg'
-                              : rank === 3
-                              ? 'bg-amber-700 text-white text-lg'
-                              : 'bg-slate-800 text-slate-400'
-                          }`}
-                        >
-                          {medal}
-                        </div>
-
-                        <div>
-                          <div className="flex items-center gap-2">
-                            <span className="text-xl">{player.avatar}</span>
-                            <span className="font-black text-white text-base">{player.name}</span>
-                            {player.isSimulated && (
-                              <span className="text-[10px] text-slate-400 font-mono px-1.5 py-0.5 rounded bg-slate-800 border border-slate-700">
-                                Bot
-                              </span>
-                            )}
-                          </div>
-                          {player.streak > 1 && (
-                            <div className="flex items-center gap-1 text-[11px] font-bold text-amber-400 mt-0.5">
-                              <Flame className="w-3.5 h-3.5 fill-amber-400 text-amber-400 animate-pulse" />
-                              <span>Striscia di {player.streak} risposte esatte!</span>
-                            </div>
-                          )}
-                        </div>
+                return (
+                  <div className="space-y-3">
+                    {/* Top Stats Overview */}
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pb-2">
+                      <div className="p-3.5 bg-amber-500/10 border border-amber-500/30 rounded-2xl text-center">
+                        <span className="text-[10px] font-black uppercase tracking-wider text-amber-400 block">
+                          🥇 Capoclassifica
+                        </span>
+                        <span className="text-sm font-black text-white truncate block">
+                          {sortedGlobal[0]?.avatar} {sortedGlobal[0]?.name}
+                        </span>
+                        <span className="text-xs font-mono font-extrabold text-amber-300">
+                          {sortedGlobal[0]?.totalScore} pt totali
+                        </span>
                       </div>
 
-                      <div className="text-right">
-                        <div className="text-2xl font-black font-mono text-amber-300">
-                          {player.score} <span className="text-xs text-slate-400 font-sans font-bold">pt</span>
-                        </div>
-                        <div className="text-[11px] text-slate-400">
-                          {rank === 1 ? 'Capoclassifica' : `${rank}° Posizione`}
-                        </div>
+                      <div className="p-3.5 bg-indigo-500/10 border border-indigo-500/30 rounded-2xl text-center">
+                        <span className="text-[10px] font-black uppercase tracking-wider text-indigo-400 block">
+                          👥 Partecipanti
+                        </span>
+                        <span className="text-lg font-black text-white block">
+                          {sortedGlobal.length} Studenti
+                        </span>
+                        <span className="text-[11px] text-slate-400">
+                          in tutte le sessioni
+                        </span>
+                      </div>
+
+                      <div className="p-3.5 bg-emerald-500/10 border border-emerald-500/30 rounded-2xl text-center">
+                        <span className="text-[10px] font-black uppercase tracking-wider text-emerald-400 block">
+                          ⚡ Punti Collezionati
+                        </span>
+                        <span className="text-lg font-black text-emerald-300 font-mono block">
+                          {sortedGlobal.reduce((acc, s) => acc + s.totalScore, 0)} pt
+                        </span>
+                        <span className="text-[11px] text-slate-400">
+                          totale classe
+                        </span>
                       </div>
                     </div>
-                  );
-                });
+
+                    {/* Leaderboard Cards */}
+                    {sortedGlobal.map((player, index) => {
+                      const rank = index + 1;
+                      const medal = rank === 1 ? '🥇' : rank === 2 ? '🥈' : rank === 3 ? '🥉' : `#${rank}`;
+                      const cardBorder =
+                        rank === 1
+                          ? 'border-amber-400/60 bg-gradient-to-r from-amber-500/15 via-slate-900 to-slate-900 shadow-amber-500/10'
+                          : rank === 2
+                          ? 'border-slate-300/50 bg-gradient-to-r from-slate-400/15 via-slate-900 to-slate-900'
+                          : rank === 3
+                          ? 'border-amber-700/50 bg-gradient-to-r from-amber-700/15 via-slate-900 to-slate-900'
+                          : 'border-slate-800 bg-slate-950/70 hover:border-slate-700';
+
+                      return (
+                        <div
+                          key={player.name}
+                          className={`p-4 rounded-2xl border flex items-center justify-between gap-4 transition-all shadow-md ${cardBorder}`}
+                        >
+                          <div className="flex items-center gap-3.5">
+                            <div
+                              className={`w-10 h-10 rounded-2xl font-black text-sm flex items-center justify-center shrink-0 shadow-sm ${
+                                rank === 1
+                                  ? 'bg-amber-400 text-slate-950 text-lg'
+                                  : rank === 2
+                                  ? 'bg-slate-300 text-slate-950 text-lg'
+                                  : rank === 3
+                                  ? 'bg-amber-700 text-white text-lg'
+                                  : 'bg-slate-800 text-slate-400'
+                              }`}
+                            >
+                              {medal}
+                            </div>
+
+                            <div>
+                              <div className="flex items-center gap-2">
+                                <span className="text-xl">{player.avatar}</span>
+                                <span className="font-black text-white text-base">{player.name}</span>
+                                {player.isSimulated && (
+                                  <span className="text-[10px] text-slate-400 font-mono px-1.5 py-0.5 rounded bg-slate-800 border border-slate-700">
+                                    Bot
+                                  </span>
+                                )}
+                              </div>
+                              <div className="flex items-center gap-2 text-[11px] text-slate-400 mt-0.5">
+                                <span>{player.gamesPlayed} {player.gamesPlayed === 1 ? 'sessione' : 'sessioni'}</span>
+                                <span>•</span>
+                                <span className="text-indigo-300 font-semibold">
+                                  In questo quiz: +{player.sessionScore} pt
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+
+                          <div className="text-right">
+                            <div className="text-2xl font-black font-mono text-amber-300">
+                              {player.totalScore} <span className="text-xs text-slate-400 font-sans font-bold">pt totali</span>
+                            </div>
+                            <div className="text-[11px] text-slate-400 font-medium">
+                              {rank === 1 ? '🏆 Capoclassifica Generale' : `${rank}° Posizione`}
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                );
               })()}
             </div>
 
             {/* Modal Footer */}
-            <div className="px-6 py-4 bg-slate-950/80 border-t border-slate-800 flex items-center justify-between">
+            <div className="px-6 py-4 bg-slate-950/90 border-t border-slate-800 flex flex-wrap items-center justify-between gap-3">
               <span className="text-xs text-slate-400">
                 Stanza: <strong className="text-amber-300 font-mono">{roomState.roomCode}</strong> • {roomState.roomName}
               </span>
-              <button
-                onClick={() => setIsLeaderboardModalOpen(false)}
-                className="px-5 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-white font-bold text-xs transition-colors cursor-pointer"
-              >
-                Chiudi
-              </button>
+
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    const allMap: Record<string, any> = {};
+                    Object.values(roomState.globalScores || {}).forEach((g) => {
+                      const key = g.name.trim().toLowerCase();
+                      allMap[key] = { name: g.name, totalScore: g.totalScore || 0, sessionScore: 0, gamesPlayed: g.gamesPlayed || 1 };
+                    });
+                    Object.values(roomState.players || {}).forEach((p) => {
+                      const key = p.name.trim().toLowerCase();
+                      if (allMap[key]) {
+                        allMap[key].sessionScore = p.score || 0;
+                      } else {
+                        allMap[key] = { name: p.name, totalScore: p.score || 0, sessionScore: p.score || 0, gamesPlayed: 1 };
+                      }
+                    });
+                    const sortedList = Object.values(allMap).sort((a, b) => b.totalScore - a.totalScore);
+                    if (sortedList.length === 0) return;
+
+                    let csv = "Posizione,Nome Studente,Punti Totali Cumulativi,Punti Sessione Attuale,Sessioni Giocate\n";
+                    sortedList.forEach((row, idx) => {
+                      csv += `${idx + 1},"${row.name.replace(/"/g, '""')}",${row.totalScore},${row.sessionScore},${row.gamesPlayed}\n`;
+                    });
+
+                    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+                    const url = URL.createObjectURL(blob);
+                    const link = document.createElement('a');
+                    link.setAttribute('href', url);
+                    link.setAttribute('download', `classifica_generale_flipquiz_${roomState.roomCode}.csv`);
+                    document.body.appendChild(link);
+                    link.click();
+                    document.body.removeChild(link);
+                  }}
+                  className="px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-750 text-indigo-300 border border-slate-700 hover:border-indigo-500/40 text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer"
+                  title="Esporta classifica generale in formato CSV"
+                >
+                  <Download className="w-4 h-4" />
+                  Esporta CSV
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (window.confirm("Sei sicuro di voler azzerare la Classifica Generale cumulativa di tutti i FlipQuizLive? I punti verranno riazzerati.")) {
+                      setRoomState((prev) => {
+                        const updated: RoomState = {
+                          ...prev,
+                          globalScores: {}
+                        };
+                        try {
+                          localStorage.removeItem('flipquiz_global_scores');
+                        } catch (e) {}
+                        firebaseSync.pushRoomState(updated);
+                        api.broadcastLocal(updated);
+                        return updated;
+                      });
+                    }
+                  }}
+                  className="px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-rose-950/60 text-rose-300 border border-slate-700 hover:border-rose-500/40 text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer"
+                  title="Azzera la classifica generale cumulativa"
+                >
+                  <Trash2 className="w-4 h-4" />
+                  Azzera Classifica
+                </button>
+
+                <button
+                  onClick={() => setIsLeaderboardModalOpen(false)}
+                  className="px-5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs shadow-md transition-colors cursor-pointer"
+                >
+                  Chiudi
+                </button>
+              </div>
             </div>
           </div>
         </div>

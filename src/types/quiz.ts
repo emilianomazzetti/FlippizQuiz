@@ -201,6 +201,14 @@ export interface RoomSettings {
   soundEnabled: boolean;
 }
 
+export interface GlobalPlayerScore {
+  name: string;
+  avatar: string;
+  totalScore: number; // Cumulative total points collected across all FlipQuizLive games
+  gamesPlayed: number; // Number of FlipQuizLive sessions played
+  lastActive: number;
+}
+
 export interface RoomState {
   roomCode: string;
   roomName: string;
@@ -210,6 +218,7 @@ export interface RoomState {
   players: Record<string, Player>;
   answersThisTurn: Record<string, AnswerSubmission>;
   drawingsThisTurn: Record<string, DrawingSubmission>;
+  globalScores?: Record<string, GlobalPlayerScore>;
   turnStartTime: number;
   turnDuration: number;
   settings: RoomSettings;

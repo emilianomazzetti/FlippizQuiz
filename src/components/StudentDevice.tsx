@@ -616,10 +616,10 @@ export const StudentDevice: React.FC<StudentDeviceProps> = ({
                   <div className="p-3 bg-slate-900 border border-slate-800 rounded-2xl text-center text-xs text-slate-300">
                     {myAnswer && myAnswer.answerPayload?.foundWords?.length > 0 ? (
                       <span className="text-emerald-300 font-bold">
-                        Parole trovate finora: {myAnswer.answerPayload.foundWords.length} su {myAnswer.answerPayload.totalWords || (currentQ.content as any)?.words?.length || 4} (+{myAnswer.pointsAwarded} pt)! Continua a cercare prima dello scadere del tempo!
+                        Parole trovate finora: {myAnswer.answerPayload.foundWords.length} su {myAnswer.answerPayload.totalWords || (currentQ.content as any)?.words?.length || 4} (+{myAnswer.pointsAwarded} pt){myAnswer.answerPayload?.foundAll ? ' 🎉 TUTTE LE PAROLE TROVATE (+PUNTI DOMANDA)!' : ''}! Continua a cercare prima dello scadere del tempo!
                       </span>
                     ) : (
-                      'Tocca le lettere per trovare le parole nascoste. Ricevi punti per ciascuna parola scovata!'
+                      'Tocca le lettere per trovare le parole nascoste. Ricevi +5 pt per ciascuna parola e i punti di default della domanda completandole tutte!'
                     )}
                   </div>
                 ) : myAnswer ? (

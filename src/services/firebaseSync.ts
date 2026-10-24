@@ -166,6 +166,7 @@ export function sanitizeRoomState(data: any, fallback?: RoomState): RoomState {
     players: (data.players && typeof data.players === 'object') ? data.players : (fallback?.players || {}),
     answersThisTurn: (data.answersThisTurn && typeof data.answersThisTurn === 'object') ? data.answersThisTurn : {},
     drawingsThisTurn: normalizedDrawings,
+    globalScores: (data.globalScores && typeof data.globalScores === 'object') ? data.globalScores : (fallback?.globalScores || {}),
     turnStartTime: typeof data.turnStartTime === 'number' ? data.turnStartTime : 0,
     turnDuration: typeof data.turnDuration === 'number' ? data.turnDuration : 25,
     resetEpoch: typeof data.resetEpoch === 'number' ? data.resetEpoch : fallback?.resetEpoch,

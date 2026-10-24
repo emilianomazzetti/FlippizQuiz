@@ -12,6 +12,7 @@ import {
   FillBlanksContent,
   AnagramContent,
   MemoryMatchContent,
+  AssociationCell,
   CellIdentifyContent,
   PuzzleContent
 } from '../types/quiz';
@@ -389,6 +390,115 @@ export const TeacherMonitor: React.FC<TeacherMonitorProps> = ({
       );
     } else if (currentQ.type === 'order_cells') {
       text = (currentQ.content as any).correctOrder?.map((o: any) => o.text).join(' → ');
+    } else if (currentQ.type === 'memory_match') {
+      const content = currentQ.content as MemoryMatchContent;
+      const pairs = content?.pairs || [];
+      const solvedCount = answersList.filter((a) => a.isCorrect).length;
+
+      const renderCellBadge = (cell?: AssociationCell, defaultFallback?: { text?: string; image?: string }) => {
+        const text = cell?.text || defaultFallback?.text;
+        const image = cell?.image || defaultFallback?.image;
+        const hasImage = Boolean(image);
+        const hasText = Boolean(text && text.trim().length > 0);
+
+        if (hasImage && hasText) {
+          return (
+            <div className="flex items-center gap-2">
+              <img src={image} alt={text} className="w-10 h-10 object-cover rounded-xl border border-slate-700 shrink-0" />
+              <span className="font-extrabold text-sm text-white">{text}</span>
+            </div>
+          );
+        }
+
+        if (hasImage) {
+          return (
+            <div className="flex items-center gap-2">
+              <img src={image} alt="Immagine" className="w-10 h-10 object-cover rounded-xl border border-slate-700 shrink-0" />
+            </div>
+          );
+        }
+
+        return (
+          <span className="font-extrabold text-sm text-white">{text || 'Cella vuota'}</span>
+        );
+      };
+
+      return (
+        <div className="p-6 bg-slate-950 border-2 border-indigo-500/50 rounded-3xl text-center space-y-5 shadow-2xl animate-scale-up">
+          <div className="flex flex-wrap items-center justify-between gap-2 pb-3 border-b border-indigo-500/20">
+            <span className="text-xs font-black text-indigo-300 uppercase tracking-widest flex items-center gap-2">
+              <span className="text-base">🃏</span> Soluzione Memory Match: Associazioni Corrette
+            </span>
+            <span className="text-xs font-bold text-emerald-400 bg-emerald-500/15 px-3 py-1 rounded-full border border-emerald-500/30">
+              {solvedCount} su {playersList.length} studenti hanno abbinato tutte le coppie
+            </span>
+          </div>
+
+          <h3 className="text-xl md:text-2xl font-black text-white">"{currentQ.title}"</h3>
+
+          {/* Correct Association Pairs Grid */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2">
+            {pairs.map((pair, idx) => {
+              const fallbackA = { image: pair.image, text: undefined };
+              const fallbackB = { text: pair.text, image: undefined };
+
+              const colors = [
+                'bg-emerald-500/15 border-emerald-500/50 text-emerald-100',
+                'bg-sky-500/15 border-sky-500/50 text-sky-100',
+                'bg-amber-500/15 border-amber-500/50 text-amber-100',
+                'bg-purple-500/15 border-purple-500/50 text-purple-100',
+                'bg-rose-500/15 border-rose-500/50 text-rose-100',
+                'bg-teal-500/15 border-teal-500/50 text-teal-100',
+              ];
+
+              const badgeColors = [
+                'bg-emerald-500 text-slate-950',
+                'bg-sky-500 text-slate-950',
+                'bg-amber-500 text-slate-950',
+                'bg-purple-500 text-white',
+                'bg-rose-500 text-white',
+                'bg-teal-500 text-slate-950',
+              ];
+
+              return (
+                <div
+                  key={pair.id || idx}
+                  className={`p-4 rounded-2xl border-2 flex items-center justify-between gap-3 shadow-lg ${colors[idx % colors.length]}`}
+                >
+                  <div className="flex items-center gap-3 text-left overflow-hidden">
+                    <span className={`w-7 h-7 rounded-lg font-black text-xs flex items-center justify-center shrink-0 shadow-md ${badgeColors[idx % badgeColors.length]}`}>
+                      #{idx + 1}
+                    </span>
+                    <div className="min-w-0">
+                      <span className="text-[10px] uppercase font-bold text-slate-400 block mb-0.5">
+                        Colonna A
+                      </span>
+                      {renderCellBadge(pair.itemA, fallbackA)}
+                    </div>
+                  </div>
+
+                  <div className="text-lg font-black text-amber-300 px-1 shrink-0">
+                    ↔️
+                  </div>
+
+                  <div className="flex items-center gap-3 text-right justify-end overflow-hidden">
+                    <div className="min-w-0 text-right">
+                      <span className="text-[10px] uppercase font-bold text-slate-400 block mb-0.5">
+                        Colonna B
+                      </span>
+                      {renderCellBadge(pair.itemB, fallbackB)}
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          <p className="text-xs text-slate-400 pt-1">
+            Ciascuna scheda evidenzia un'associazione corretta abbinata dai ragazzi durante la sfida.
+          </p>
+        </div>
+      );
     } else if (currentQ.type === 'puzzle') {
       const content = currentQ.content as PuzzleContent;
       const solvedCount = answersList.filter((a) => a.isCorrect).length;
