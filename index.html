@@ -21,36 +21,6 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800;900&family=Fredoka:wght@500;600;700&display=swap" rel="stylesheet">
-    <script>
-      (function() {
-        var isGitHubPages = window.location.hostname.indexOf('github.io') !== -1;
-        var pathname = window.location.pathname;
-
-        // If on GitHub Pages and URL ends in /docs/ or /docs, redirect to root repo path / to prevent double /docs/ path nesting
-        if (isGitHubPages && (pathname.endsWith('/docs/') || pathname.endsWith('/docs'))) {
-          var cleanPath = pathname.replace(/\/docs\/?$/, '/');
-          window.location.replace(cleanPath + window.location.search + window.location.hash);
-          return;
-        }
-
-        // Ensure trailing slash for directory paths
-        if (pathname.length > 1 && !pathname.endsWith('/') && !pathname.split('/').pop().includes('.')) {
-          window.location.replace(pathname + '/' + window.location.search + window.location.hash);
-        }
-      })();
-
-      // Fallback asset loader error listener
-      window.addEventListener('error', function(e) {
-        if (e.target && (e.target.tagName === 'SCRIPT' || e.target.tagName === 'LINK')) {
-          console.warn('Asset loading note on GitHub Pages:', e.target.src || e.target.href);
-          var path = window.location.pathname;
-          if (path.indexOf('/docs') !== -1) {
-            var newPath = path.replace(/\/docs\/?$/, '/') + window.location.search + window.location.hash;
-            window.location.replace(newPath);
-          }
-        }
-      }, true);
-    </script>
   </head>
   <body class="bg-slate-900 text-slate-100 font-['Plus_Jakarta_Sans',sans-serif] min-h-screen antialiased selection:bg-indigo-500 selection:text-white">
     <div id="root">
@@ -67,11 +37,11 @@
             <span>⚠️</span> Avvio su GitHub Pages
           </div>
           <p style="font-size: 13px; color: #cbd5e1; line-height: 1.5; margin: 0 0 14px 0;">
-            I file sorgente TypeScript (.tsx) non sono compilati da GitHub senza build. Apri la pagina principale del repository oppure seleziona la cartella <strong>/docs</strong> nelle impostazioni di GitHub Pages:
+            I file sorgente TypeScript (.tsx) non sono compilati da GitHub senza build. Apri la pagina della versione compilata in <strong>/docs/</strong> oppure imposta la cartella <strong>/docs</strong> nelle impostazioni di GitHub Pages:
           </p>
           <div style="display: flex; flex-direction: column; gap: 8px;">
-            <button onclick="window.location.href=window.location.pathname.replace(/\/docs\/?$/, '/') + window.location.search" style="display: block; text-align: center; background: linear-gradient(135deg, #4f46e5, #7c3aed); color: #ffffff; text-decoration: none; font-weight: 700; font-size: 13px; padding: 12px 16px; border-radius: 10px; border: none; cursor: pointer;">
-              🚀 Apri Versione Compilata Pronta dell'App
+            <button onclick="var p=window.location.pathname; if(p.indexOf('/docs')===-1){ window.location.href=(p.endsWith('/')?p:p+'/')+'docs/'+window.location.search+window.location.hash; } else { window.location.reload(); }" style="display: block; text-align: center; background: linear-gradient(135deg, #4f46e5, #7c3aed); color: #ffffff; text-decoration: none; font-weight: 700; font-size: 13px; padding: 12px 16px; border-radius: 10px; border: none; cursor: pointer;">
+              🚀 Apri Versione Compilata Pronta dell'App (/docs/)
             </button>
             <button onclick="window.location.reload()" style="background: rgba(255,255,255,0.08); color: #e2e8f0; border: 1px solid rgba(255,255,255,0.15); font-weight: 600; font-size: 12px; padding: 8px 12px; border-radius: 10px; cursor: pointer;">
               🔄 Ricarica Pagina
@@ -80,13 +50,21 @@
         </div>
 
         <script>
-          // Se dopo 3.5 secondi React non è ancora montato, mostra il riquadro diagnostico
+          // Automatic fallback for static GitHub Pages if uncompiled root index.html is loaded directly
           setTimeout(function() {
             if (!window.__FLIPQUIZ_MOUNTED__) {
+              var isGh = window.location.hostname.indexOf('github.io') !== -1;
+              var path = window.location.pathname;
+              if (isGh && path.indexOf('/docs') === -1) {
+                var target = path.endsWith('/') ? path : path + '/';
+                target += 'docs/' + window.location.search + window.location.hash;
+                window.location.replace(target);
+                return;
+              }
               var diag = document.getElementById('diagnostic-box');
               if (diag) diag.style.display = 'block';
             }
-          }, 3500);
+          }, 1500);
         </script>
 
         <style>
