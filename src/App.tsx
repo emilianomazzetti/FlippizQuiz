@@ -13,6 +13,7 @@ import { StudentDevice } from './components/StudentDevice';
 import { ArchitectureGuideModal } from './components/ArchitectureGuideModal';
 import { FirebaseDiagnosticModal } from './components/FirebaseDiagnosticModal';
 import { QuestionCreator } from './components/QuestionCreator';
+import { TeacherConfigurationModal } from './components/TeacherConfigurationModal';
 import { sound } from './utils/audio';
 import confetti from 'canvas-confetti';
 import { api } from './services/api';
@@ -33,7 +34,11 @@ import {
   PlusCircle,
   Maximize,
   Minimize,
-  Tablet
+  Tablet,
+  Settings,
+  Volume2,
+  VolumeX,
+  Volume1
 } from 'lucide-react';
 import { useFullscreen } from './utils/fullscreen';
 
@@ -69,6 +74,13 @@ export default function App() {
   const [myPlayer, setMyPlayer] = useState<Player | null>(null);
   const [wasKicked, setWasKicked] = useState<boolean>(false);
   const myPlayerRef = useRef<Player | null>(null);
+
+  // Teacher configuration modal and volume state (accessible from top navigation bar)
+  const [isTeacherConfigOpen, setIsTeacherConfigOpen] = useState<boolean>(false);
+  const [selectedConfigQId, setSelectedConfigQId] = useState<string>('all');
+  const [musicVolumePercent, setMusicVolumePercent] = useState<number>(() =>
+    Math.round(sound.getMusicVolume() * 100)
+  );
 
   useEffect(() => {
     myPlayerRef.current = myPlayer;
@@ -1055,6 +1067,9 @@ export default function App() {
     setRoomState((prev) => {
       const nextVal = !prev.settings.soundEnabled;
       sound.setEnabled(nextVal);
+      if (!nextVal) {
+        sound.stopBackgroundMusic();
+      }
       return {
         ...prev,
         settings: {
@@ -1210,8 +1225,69 @@ export default function App() {
               className="px-3 py-1.5 rounded-xl bg-slate-850 hover:bg-slate-800 border border-slate-700 text-xs font-bold text-slate-200 hover:text-white flex items-center gap-1.5 transition-colors shadow-sm cursor-pointer"
             >
               <BookOpen className="w-3.5 h-3.5" />
-              Guida
+              <span className="hidden sm:inline">Guida</span>
             </button>
+
+            {/* Configurazione Docente Button (spostato in alto vicino a Schermo Intero) */}
+            {(!isLockedStudent || viewRole === 'teacher') && (
+              <button
+                type="button"
+                onClick={() => {
+                  setSelectedConfigQId('all');
+                  setIsTeacherConfigOpen(true);
+                }}
+                className="px-3 py-1.5 rounded-xl bg-slate-850 hover:bg-slate-800 border border-slate-700 text-xs font-bold text-indigo-300 hover:text-white flex items-center gap-1.5 transition-colors shadow-sm cursor-pointer"
+                title="Configurazione Docente (modifica tempi, punti e musica di sottofondo)"
+              >
+                <Settings className="w-3.5 h-3.5 text-indigo-400" />
+                <span className="hidden md:inline">Configurazione Docente</span>
+              </button>
+            )}
+
+            {/* Funzione Volume (spostato in alto vicino a Schermo Intero) */}
+            <div className="flex items-center gap-1.5 bg-slate-850 border border-slate-700 rounded-xl px-2.5 py-1 shadow-sm">
+              <button
+                type="button"
+                onClick={handleToggleSound}
+                className="flex items-center gap-1.5 text-xs font-bold text-slate-200 hover:text-white transition-colors cursor-pointer"
+                title={
+                  roomState.settings.soundEnabled
+                    ? `Suoni attivi (${musicVolumePercent}%). Clicca per disattivare`
+                    : 'Suoni disattivati. Clicca per attivare'
+                }
+              >
+                {roomState.settings.soundEnabled ? (
+                  musicVolumePercent === 0 ? (
+                    <VolumeX className="w-3.5 h-3.5 text-slate-400" />
+                  ) : musicVolumePercent < 50 ? (
+                    <Volume1 className="w-3.5 h-3.5 text-indigo-400" />
+                  ) : (
+                    <Volume2 className="w-3.5 h-3.5 text-indigo-400" />
+                  )
+                ) : (
+                  <VolumeX className="w-3.5 h-3.5 text-rose-400" />
+                )}
+                <span className="hidden lg:inline text-[11px] font-mono">
+                  {roomState.settings.soundEnabled ? `${musicVolumePercent}%` : 'Muto'}
+                </span>
+              </button>
+
+              {roomState.settings.soundEnabled && (
+                <input
+                  type="range"
+                  min={0}
+                  max={100}
+                  value={musicVolumePercent}
+                  onChange={(e) => {
+                    const val = Number(e.target.value);
+                    setMusicVolumePercent(val);
+                    sound.setMusicVolume(val / 100);
+                  }}
+                  className="w-14 sm:w-16 h-1.5 accent-indigo-400 bg-slate-700 rounded-lg cursor-pointer hidden sm:inline-block ml-0.5"
+                  title={`Regola volume: ${musicVolumePercent}%`}
+                />
+              )}
+            </div>
 
             {/* Tablet & Desktop Fullscreen Toggle Button */}
             <button
@@ -1255,6 +1331,10 @@ export default function App() {
             onKickStudent={handleKickStudent}
             onToggleSound={handleToggleSound}
             onResetGame={handleResetGame}
+            onOpenConfig={(qId) => {
+              setSelectedConfigQId(qId || 'all');
+              setIsTeacherConfigOpen(true);
+            }}
           />
         ) : (
           <StudentDevice
@@ -1281,6 +1361,15 @@ export default function App() {
       <FirebaseDiagnosticModal
         isOpen={isFirebaseModalOpen}
         onClose={() => setIsFirebaseModalOpen(false)}
+      />
+
+      {/* Teacher Configuration Modal */}
+      <TeacherConfigurationModal
+        isOpen={isTeacherConfigOpen}
+        onClose={() => setIsTeacherConfigOpen(false)}
+        roomState={roomState}
+        onUpdateQuestionPointsAndTime={handleUpdateQuestionPointsAndTime}
+        initialSelectedQId={selectedConfigQId}
       />
 
       {/* Classifica Generale Modal (Docente & LIM) */}
