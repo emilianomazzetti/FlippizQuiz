@@ -44,6 +44,7 @@ interface StudentDeviceProps {
   onSubmitAnswer: (isCorrect: boolean, payload?: any) => void;
   onSaveDrawing: (dataUrl: string) => void;
   onVoteDrawing: (targetPlayerId: string) => void;
+  showQuestionToStudents?: boolean;
 }
 
 const AVATARS = ['🚀', '🦊', '⚡', '🦁', '🐼', '🎨', '🌟', '🎯', '🦉', '🐬', '🏆', '🍕'];
@@ -57,7 +58,8 @@ export const StudentDevice: React.FC<StudentDeviceProps> = ({
   onSubmitQuestion,
   onSubmitAnswer,
   onSaveDrawing,
-  onVoteDrawing
+  onVoteDrawing,
+  showQuestionToStudents = false
 }) => {
   // Join form state
   const [name, setName] = useState('');
@@ -418,6 +420,14 @@ export const StudentDevice: React.FC<StudentDeviceProps> = ({
           </div>
         </div>
       </div>
+
+      {/* Question Display Banner */}
+      {showQuestionToStudents && currentQ && (
+        <div className="p-4 bg-indigo-900/40 border border-indigo-500/50 rounded-2xl animate-fade-in">
+          <h4 className="text-[10px] font-black text-indigo-300 uppercase tracking-widest mb-1">Domanda Corrente:</h4>
+          <p className="text-sm font-bold text-white">{currentQ.title}</p>
+        </div>
+      )}
 
       {/* Tabs during lobby: Play vs Create */}
       {roomState.phase === 'lobby' && (

@@ -12,6 +12,7 @@ import {
   GlobalPlayerScore
 } from '../types/quiz';
 import { INITIAL_QUESTIONS } from '../data/initialQuestions';
+import { getGlobalKey } from '../utils/leaderboard';
 
 export interface FirebaseDiagnosticResult {
   initialized: boolean;
@@ -702,7 +703,7 @@ export const firebaseSync = {
     avatar: string,
     scoreDelta: number
   ): Promise<boolean> {
-    const cleanKey = playerName.trim().toLowerCase().replace(/[^a-zA-Z0-9_-]/g, '_');
+    const cleanKey = getGlobalKey(playerName);
     if (!cleanKey) return false;
 
     try {
@@ -735,7 +736,7 @@ export const firebaseSync = {
     try {
       for (const p of players) {
         if (!p || !p.name) continue;
-        const cleanKey = p.name.trim().toLowerCase().replace(/[^a-zA-Z0-9_-]/g, '_');
+        const cleanKey = getGlobalKey(p.name);
         if (!cleanKey) continue;
 
         const globalRef = ref(rtdb, `globalLeaderboard/${cleanKey}`);

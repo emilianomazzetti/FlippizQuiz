@@ -19,6 +19,7 @@ import { sound } from './utils/audio';
 import confetti from 'canvas-confetti';
 import { api } from './services/api';
 import { firebaseSync } from './services/firebaseSync';
+import { getGlobalKey } from './utils/leaderboard';
 import {
   Monitor,
   Smartphone,
@@ -66,6 +67,7 @@ export default function App() {
   const [isFirebaseOnline, setIsFirebaseOnline] = useState<boolean>(false);
   const [isLeaderboardModalOpen, setIsLeaderboardModalOpen] = useState<boolean>(false);
   const [isTeacherCreatorOpen, setIsTeacherCreatorOpen] = useState<boolean>(false);
+  const [showQuestionToStudents, setShowQuestionToStudents] = useState<boolean>(false);
 
   // Fullscreen support for tablet devices and LIM
   const { isFullscreen: isAppFs, toggle: toggleAppFs } = useFullscreen();
@@ -684,7 +686,7 @@ export default function App() {
       };
 
       // Accumulate scoreDelta in global scores (tracked across all FlipQuizLive sessions)
-      const globalKey = playerName.trim().toLowerCase();
+      const globalKey = getGlobalKey(playerName);
       const existingGlobal = prev.globalScores?.[globalKey] || {
         name: playerName,
         avatar: existingPlayer.avatar || '🚀',
@@ -766,7 +768,7 @@ export default function App() {
     } catch (e) {}
 
     setRoomState((prev) => {
-      const globalKey = cleanName.toLowerCase();
+      const globalKey = getGlobalKey(cleanName);
       const existingGlobal = prev.globalScores?.[globalKey] || {
         name: cleanName,
         avatar,
@@ -901,7 +903,7 @@ export default function App() {
         : prev.players;
 
       if (artist) {
-        const globalKey = artist.name.trim().toLowerCase();
+        const globalKey = getGlobalKey(artist.name);
         const existingGlobal = updatedGlobal[globalKey] || {
           name: artist.name,
           avatar: artist.avatar,
@@ -952,7 +954,7 @@ export default function App() {
       // Increment gamesPlayed for all currently connected students in globalScores
       const updatedGlobal = { ...(prev.globalScores || {}) };
       Object.values(prev.players || {}).forEach((p) => {
-        const key = p.name.trim().toLowerCase();
+        const key = getGlobalKey(p.name);
         const existing = updatedGlobal[key] || {
           name: p.name,
           avatar: p.avatar,
@@ -1307,6 +1309,16 @@ export default function App() {
                   Schermo Docente (LIM)
                 </div>
 
+                <label className="flex items-center gap-2 px-3.5 py-1.5 rounded-xl bg-slate-800 text-xs font-bold text-slate-300 cursor-pointer hover:bg-slate-750 transition-colors">
+                  <input
+                    type="checkbox"
+                    checked={showQuestionToStudents}
+                    onChange={(e) => setShowQuestionToStudents(e.target.checked)}
+                    className="accent-indigo-500 w-4 h-4 rounded"
+                  />
+                  VEDI DOMANDE
+                </label>
+
                 <button
                   type="button"
                   onClick={() => setIsLeaderboardModalOpen(true)}
@@ -1526,6 +1538,7 @@ export default function App() {
             onSubmitAnswer={handleSubmitAnswer}
             onSaveDrawing={handleSaveDrawing}
             onVoteDrawing={handleVoteDrawing}
+            showQuestionToStudents={showQuestionToStudents}
           />
         )}
       </main>
