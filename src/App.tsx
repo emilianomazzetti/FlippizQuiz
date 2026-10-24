@@ -67,6 +67,7 @@ export default function App() {
   const [isFirebaseOnline, setIsFirebaseOnline] = useState<boolean>(false);
   const [isLeaderboardModalOpen, setIsLeaderboardModalOpen] = useState<boolean>(false);
   const [isTeacherCreatorOpen, setIsTeacherCreatorOpen] = useState<boolean>(false);
+  const [persistentStudents, setPersistentStudents] = useState<Record<string, GlobalPlayerScore>>({});
 
   // Fullscreen support for tablet devices and LIM
   const { isFullscreen: isAppFs, toggle: toggleAppFs } = useFullscreen();
@@ -208,17 +209,9 @@ export default function App() {
       setRoomState(state);
     });
 
-    // 3b. Listen to persistent top-level global leaderboard in Firebase RTDB
-    const unsubGlobal = firebaseSync.listenToGlobalLeaderboard((remoteGlobalScores) => {
-      if (remoteGlobalScores && Object.keys(remoteGlobalScores).length > 0) {
-        setRoomState((prev) => ({
-          ...prev,
-          globalScores: {
-            ...(prev.globalScores || {}),
-            ...remoteGlobalScores
-          }
-        }));
-      }
+    // 3b. Listen to persistent top-level students in Firebase RTDB
+    const unsubGlobal = firebaseSync.listenToAllStudents((remoteStudents) => {
+      setPersistentStudents(remoteStudents || {});
     });
 
     const unsubFirebase = firebaseSync.listenToRoom(roomState.roomCode, (firebaseState) => {
@@ -375,12 +368,12 @@ export default function App() {
 
   // Persist cumulative global leaderboard across all FlipQuizLive sessions
   useEffect(() => {
-    if (roomState.globalScores && Object.keys(roomState.globalScores).length > 0) {
+    if (persistentStudents && Object.keys(persistentStudents).length > 0) {
       try {
-        localStorage.setItem('flipquiz_global_scores', JSON.stringify(roomState.globalScores));
+        localStorage.setItem('flipquiz_global_scores', JSON.stringify(persistentStudents));
       } catch (e) {}
     }
-  }, [roomState.globalScores]);
+  }, [persistentStudents]);
 
   // Automatically transition from question_intro (3 seconds) to question_active
   useEffect(() => {
@@ -723,9 +716,9 @@ export default function App() {
         isCorrect
       );
 
-      // Persist global score delta to top-level RTDB globalLeaderboard node
+      // Persist global score delta to persistent students node
       if (scoreDelta !== 0) {
-        firebaseSync.updateGlobalScore(
+        firebaseSync.updateStudentScore(
           playerName,
           existingPlayer.avatar || '🚀',
           scoreDelta
@@ -1616,9 +1609,8 @@ export default function App() {
                   isSimulated?: boolean;
                 }> = {};
 
-                // 1. Populate from globalScores
-                Object.values(roomState.globalScores || {}).forEach((g) => {
-                  const key = g.name.trim().toLowerCase();
+                // 1. Populate from persistentStudents
+                Object.entries(persistentStudents || {}).forEach(([key, g]) => {
                   allMap[key] = {
                     name: g.name,
                     avatar: g.avatar,

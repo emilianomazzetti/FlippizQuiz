@@ -670,33 +670,30 @@ export const firebaseSync = {
     };
   },
 
-  // Realtime subscription to top-level persistent cumulative global leaderboard across all FlipQuizLive sessions
-  listenToGlobalLeaderboard(onUpdate: (scores: Record<string, GlobalPlayerScore>) => void): () => void {
+  // Listen to permanent student statistics
+  listenToAllStudents(onUpdate: (students: Record<string, GlobalPlayerScore>) => void): () => void {
     try {
-      const globalRef = ref(rtdb, 'globalLeaderboard');
+      const studentsRef = ref(rtdb, 'students');
       const unsub = onValue(
-        globalRef,
+        studentsRef,
         (snap) => {
           notifyConnectionChange(true);
           const val = snap.val() || {};
           onUpdate(val);
-          try {
-            localStorage.setItem('flipquiz_global_scores', JSON.stringify(val));
-          } catch (e) {}
         },
         (err) => {
-          console.warn('listenToGlobalLeaderboard error:', err.message);
+          console.warn('listenToAllStudents error:', err.message);
         }
       );
       return unsub;
     } catch (e) {
-      console.warn('listenToGlobalLeaderboard listener note:', e);
+      console.warn('listenToAllStudents listener note:', e);
       return () => {};
     }
   },
 
-  // Persistently accumulate student score in top-level RTDB globalLeaderboard node
-  async updateGlobalScore(
+  // Update permanent student score
+  async updateStudentScore(
     playerName: string,
     avatar: string,
     scoreDelta: number
@@ -705,8 +702,8 @@ export const firebaseSync = {
     if (!cleanKey) return false;
 
     try {
-      const globalRef = ref(rtdb, `globalLeaderboard/${cleanKey}`);
-      const snap = await get(globalRef);
+      const studentRef = ref(rtdb, `students/${cleanKey}`);
+      const snap = await get(studentRef);
       const existing = snap.exists() ? snap.val() : null;
 
       const totalScore = Math.max(0, (existing?.totalScore || 0) + scoreDelta);
@@ -720,16 +717,16 @@ export const firebaseSync = {
         lastActive: Date.now()
       };
 
-      await set(globalRef, payload);
+      await set(studentRef, payload);
       notifyConnectionChange(true);
       return true;
     } catch (e) {
-      console.warn('updateGlobalScore Firebase error:', e);
+      console.warn('updateStudentScore Firebase error:', e);
       return false;
     }
   },
 
-  // Increment gamesPlayed for connected students on new game session start
+  // Record new session played for student
   async recordGamePlayedForStudents(players: Player[]): Promise<boolean> {
     try {
       for (const p of players) {
@@ -737,11 +734,11 @@ export const firebaseSync = {
         const cleanKey = getGlobalKey(p.name);
         if (!cleanKey) continue;
 
-        const globalRef = ref(rtdb, `globalLeaderboard/${cleanKey}`);
-        const snap = await get(globalRef);
+        const studentRef = ref(rtdb, `students/${cleanKey}`);
+        const snap = await get(studentRef);
         const existing = snap.exists() ? snap.val() : null;
 
-        await set(globalRef, {
+        await set(studentRef, {
           name: p.name.trim(),
           avatar: p.avatar || existing?.avatar || '🚀',
           totalScore: existing?.totalScore || p.score || 0,
@@ -757,33 +754,17 @@ export const firebaseSync = {
     }
   },
 
-  // Clear global leaderboard in RTDB and local storage
-  async clearGlobalLeaderboard(): Promise<boolean> {
-    try {
-      const globalRef = ref(rtdb, 'globalLeaderboard');
-      await set(globalRef, null);
-      try {
-        localStorage.removeItem('flipquiz_global_scores');
-      } catch (e) {}
-      notifyConnectionChange(true);
-      return true;
-    } catch (e) {
-      console.warn('clearGlobalLeaderboard error:', e);
-      return false;
-    }
-  },
-
-  // Remove a specific student from global leaderboard
-  async removeGlobalScore(playerName: string): Promise<boolean> {
+  // Remove a specific student from permanent database
+  async removeStudent(playerName: string): Promise<boolean> {
     const cleanKey = getGlobalKey(playerName);
     if (!cleanKey) return false;
     try {
-      const globalRef = ref(rtdb, `globalLeaderboard/${cleanKey}`);
-      await remove(globalRef);
+      const studentRef = ref(rtdb, `students/${cleanKey}`);
+      await remove(studentRef);
       notifyConnectionChange(true);
       return true;
     } catch (e) {
-      console.warn('removeGlobalScore Firebase error:', e);
+      console.warn('removeStudent Firebase error:', e);
       return false;
     }
   }
