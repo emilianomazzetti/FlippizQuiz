@@ -210,6 +210,11 @@ export const firebaseSync = {
         if (data && data.phase) {
           notifyConnectionChange(true);
           const sanitized = sanitizeRoomState(data, defaultState);
+          if (sanitized.teacherClosed || sanitized.phase === 'closed') {
+            sanitized.teacherClosed = false;
+            sanitized.phase = 'lobby';
+            await update(roomRef, { teacherClosed: false, phase: 'lobby' });
+          }
           return sanitized;
         }
       }

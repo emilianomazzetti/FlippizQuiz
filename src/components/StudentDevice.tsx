@@ -248,26 +248,7 @@ export const StudentDevice: React.FC<StudentDeviceProps> = ({
   if (!activePlayer) {
     return (
       <div className="w-full max-w-md mx-auto p-6 bg-slate-900 border border-slate-800 rounded-3xl shadow-2xl space-y-6 text-slate-100 animate-fade-in my-6">
-        {/* Tablet Fullscreen Quick Button in Join Card */}
-        <div className="flex items-center justify-between pb-3 border-b border-slate-800">
-          <div className="flex items-center gap-1.5 text-xs font-bold text-slate-400">
-            <Tablet className="w-4 h-4 text-indigo-400" />
-            <span>Tablet & Smartphone</span>
-          </div>
-          <button
-            type="button"
-            onClick={toggleFullscreen}
-            className={`px-3 py-1.5 rounded-xl text-xs font-bold border flex items-center gap-1.5 transition-all cursor-pointer ${
-              isFullscreen
-                ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40 hover:bg-emerald-500/30'
-                : 'bg-indigo-600/30 text-indigo-200 border-indigo-500/50 hover:bg-indigo-600/50'
-            }`}
-            title="Attiva la modalità a schermo intero sul dispositivo tablet"
-          >
-            {isFullscreen ? <Minimize className="w-3.5 h-3.5" /> : <Maximize className="w-3.5 h-3.5" />}
-            <span>{isFullscreen ? 'Esci Schermo Intero' : 'Schermo Intero ⛶'}</span>
-          </button>
-        </div>
+
 
         <div className="text-center space-y-2">
           <div className="w-16 h-16 mx-auto rounded-3xl bg-gradient-to-tr from-indigo-500 to-purple-600 flex items-center justify-center text-3xl shadow-lg shadow-indigo-500/30">
@@ -425,30 +406,6 @@ export const StudentDevice: React.FC<StudentDeviceProps> = ({
         </div>
 
         <div className="flex items-center gap-2 sm:gap-3">
-          {/* Fullscreen Toggle */}
-          <button
-            type="button"
-            onClick={toggleFullscreen}
-            className={`px-2.5 py-1.5 rounded-xl border text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer ${
-              isFullscreen
-                ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40 hover:bg-emerald-500/30'
-                : 'bg-indigo-600/30 text-indigo-200 border-indigo-500/50 hover:bg-indigo-600/50'
-            }`}
-            title={isFullscreen ? 'Esci da schermo intero' : 'Attiva schermo intero tablet'}
-          >
-            {isFullscreen ? (
-              <>
-                <Minimize className="w-3.5 h-3.5" />
-                <span className="hidden sm:inline">Esci F.S.</span>
-              </>
-            ) : (
-              <>
-                <Maximize className="w-3.5 h-3.5" />
-                <span className="hidden sm:inline">Schermo Intero</span>
-              </>
-            )}
-          </button>
-
           {activePlayer.streak > 1 && (
             <div className="flex items-center gap-1 px-2.5 py-1 bg-amber-500/20 border border-amber-500/40 rounded-xl text-xs font-black text-amber-300">
               <Flame className="w-3.5 h-3.5 fill-amber-400" />
