@@ -1265,26 +1265,8 @@ export const TeacherMonitor: React.FC<TeacherMonitorProps> = ({
               </div>
             </div>
           </div>
-
-            {/* Room Bar at bottom of lobby (below the questions repository) */}
-            <div className="w-full flex flex-wrap items-center justify-between gap-4 p-4 sm:p-5 bg-slate-900/95 border border-slate-800 rounded-3xl shadow-xl backdrop-blur-md mt-2">
-              <div className="flex items-center gap-4">
-                <div className="px-3.5 py-2 rounded-2xl bg-gradient-to-r from-indigo-500 to-purple-600 font-black text-sm tracking-widest text-white shadow">
-                  {roomState.roomCode}
-                </div>
-                <div>
-                  <h3 className="font-extrabold text-base text-white">FlipQuiz Live Monitor</h3>
-                  <p className="text-xs text-slate-400">Schermo Proiezione Docente / LIM</p>
-                </div>
-              </div>
-
-              <div className="flex items-center gap-2 text-xs text-slate-400 font-bold">
-                <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-                <span>Sessione Docente Attiva</span>
-              </div>
-            </div>
-          </div>
-        )}
+        </div>
+      )}
 
         {/* PHASE 2: QUESTION INTRO SPLASH */}
         {roomState.phase === 'question_intro' && currentQ && (

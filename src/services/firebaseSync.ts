@@ -8,7 +8,8 @@ import {
   Question,
   AnswerSubmission,
   DrawingSubmission,
-  GamePhase
+  GamePhase,
+  GlobalPlayerScore
 } from '../types/quiz';
 import { INITIAL_QUESTIONS } from '../data/initialQuestions';
 
@@ -666,5 +667,110 @@ export const firebaseSync = {
       projectId,
       databaseUrl
     };
+  },
+
+  // Realtime subscription to top-level persistent cumulative global leaderboard across all FlipQuizLive sessions
+  listenToGlobalLeaderboard(onUpdate: (scores: Record<string, GlobalPlayerScore>) => void): () => void {
+    try {
+      const globalRef = ref(rtdb, 'globalLeaderboard');
+      const unsub = onValue(
+        globalRef,
+        (snap) => {
+          if (snap.exists()) {
+            notifyConnectionChange(true);
+            const val = snap.val() || {};
+            onUpdate(val);
+            try {
+              localStorage.setItem('flipquiz_global_scores', JSON.stringify(val));
+            } catch (e) {}
+          }
+        },
+        (err) => {
+          console.warn('listenToGlobalLeaderboard error:', err.message);
+        }
+      );
+      return unsub;
+    } catch (e) {
+      console.warn('listenToGlobalLeaderboard listener note:', e);
+      return () => {};
+    }
+  },
+
+  // Persistently accumulate student score in top-level RTDB globalLeaderboard node
+  async updateGlobalScore(
+    playerName: string,
+    avatar: string,
+    scoreDelta: number
+  ): Promise<boolean> {
+    const cleanKey = playerName.trim().toLowerCase().replace(/[^a-zA-Z0-9_-]/g, '_');
+    if (!cleanKey) return false;
+
+    try {
+      const globalRef = ref(rtdb, `globalLeaderboard/${cleanKey}`);
+      const snap = await get(globalRef);
+      const existing = snap.exists() ? snap.val() : null;
+
+      const totalScore = Math.max(0, (existing?.totalScore || 0) + scoreDelta);
+      const gamesPlayed = existing?.gamesPlayed || 1;
+
+      const payload = {
+        name: playerName.trim(),
+        avatar: avatar || existing?.avatar || '🚀',
+        totalScore,
+        gamesPlayed,
+        lastActive: Date.now()
+      };
+
+      await set(globalRef, payload);
+      notifyConnectionChange(true);
+      return true;
+    } catch (e) {
+      console.warn('updateGlobalScore Firebase error:', e);
+      return false;
+    }
+  },
+
+  // Increment gamesPlayed for connected students on new game session start
+  async recordGamePlayedForStudents(players: Player[]): Promise<boolean> {
+    try {
+      for (const p of players) {
+        if (!p || !p.name) continue;
+        const cleanKey = p.name.trim().toLowerCase().replace(/[^a-zA-Z0-9_-]/g, '_');
+        if (!cleanKey) continue;
+
+        const globalRef = ref(rtdb, `globalLeaderboard/${cleanKey}`);
+        const snap = await get(globalRef);
+        const existing = snap.exists() ? snap.val() : null;
+
+        await set(globalRef, {
+          name: p.name.trim(),
+          avatar: p.avatar || existing?.avatar || '🚀',
+          totalScore: existing?.totalScore || p.score || 0,
+          gamesPlayed: (existing?.gamesPlayed || 0) + 1,
+          lastActive: Date.now()
+        });
+      }
+      notifyConnectionChange(true);
+      return true;
+    } catch (e) {
+      console.warn('recordGamePlayedForStudents error:', e);
+      return false;
+    }
+  },
+
+  // Clear global leaderboard in RTDB and local storage
+  async clearGlobalLeaderboard(): Promise<boolean> {
+    try {
+      const globalRef = ref(rtdb, 'globalLeaderboard');
+      await set(globalRef, null);
+      try {
+        localStorage.removeItem('flipquiz_global_scores');
+      } catch (e) {}
+      notifyConnectionChange(true);
+      return true;
+    } catch (e) {
+      console.warn('clearGlobalLeaderboard error:', e);
+      return false;
+    }
   }
 };

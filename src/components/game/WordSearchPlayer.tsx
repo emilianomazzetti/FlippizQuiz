@@ -62,16 +62,36 @@ export const WordSearchPlayer: React.FC<WordSearchPlayerProps> = ({
     return false;
   };
 
+  // Helper to check if a target cell continues a straight line from current selected sequence
+  const isValidNextCell = (coords: { r: number; c: number }[], r: number, c: number) => {
+    if (coords.length === 0) return true;
+    const c0 = coords[0];
+    const last = coords[coords.length - 1];
+
+    if (last.r === r && last.c === c) return false;
+
+    if (coords.length === 1) {
+      // 2nd cell must be adjacent neighbor (1 step in 8-directions)
+      return Math.max(Math.abs(r - c0.r), Math.abs(c - c0.c)) === 1;
+    }
+
+    // 3rd+ cells: direction vector (dr, dc) established by first two cells
+    const c1 = coords[1];
+    const dr = Math.sign(c1.r - c0.r);
+    const dc = Math.sign(c1.c - c0.c);
+
+    return r === last.r + dr && c === last.c + dc;
+  };
+
   // Handle cell selection (both for tap and swipe)
   const handleSelectCell = (r: number, c: number) => {
     if (disabled || isCoordFound(r, c)) return;
 
-    // Check if cell is already in current selected sequence
     const existingIndex = selectedCoords.findIndex((sc) => sc.r === r && sc.c === c);
 
     if (existingIndex !== -1) {
-      // If tapping the very last selected cell, remove it (undo last step)
-      if (existingIndex === selectedCoords.length - 1) {
+      // Undo last step if tapping/dragging back onto the previous cell
+      if (existingIndex === selectedCoords.length - 2) {
         const next = selectedCoords.slice(0, -1);
         setSelectedCoords(next);
         evaluateSequence(next);
@@ -79,13 +99,19 @@ export const WordSearchPlayer: React.FC<WordSearchPlayerProps> = ({
       return;
     }
 
-    // Otherwise, append cell to active sequence
-    const nextCoords = [...selectedCoords, { r, c }];
-    setSelectedCoords(nextCoords);
-    sound.playTick();
-
-    // Check match instantly
-    evaluateSequence(nextCoords);
+    // Check if cell is a valid next cell along a straight line
+    if (isValidNextCell(selectedCoords, r, c)) {
+      const nextCoords = [...selectedCoords, { r, c }];
+      setSelectedCoords(nextCoords);
+      sound.playTick();
+      evaluateSequence(nextCoords);
+    } else {
+      // If cell is not adjacent/line-following, reset selection starting at this new cell
+      const freshCoords = [{ r, c }];
+      setSelectedCoords(freshCoords);
+      sound.playTick();
+      evaluateSequence(freshCoords);
+    }
   };
 
   const handlePointerDownCell = (r: number, c: number, e: React.PointerEvent) => {
@@ -99,7 +125,23 @@ export const WordSearchPlayer: React.FC<WordSearchPlayerProps> = ({
 
   const handlePointerEnterCell = (r: number, c: number) => {
     if (!isDraggingRef.current || disabled || isCoordFound(r, c)) return;
-    handleSelectCell(r, c);
+
+    const existingIndex = selectedCoords.findIndex((sc) => sc.r === r && sc.c === c);
+    if (existingIndex === selectedCoords.length - 2) {
+      // Undo last step when dragging back
+      const next = selectedCoords.slice(0, -1);
+      setSelectedCoords(next);
+      evaluateSequence(next);
+      return;
+    }
+
+    // Only extend during drag if the cell strictly continues the straight line
+    if (isValidNextCell(selectedCoords, r, c)) {
+      const nextCoords = [...selectedCoords, { r, c }];
+      setSelectedCoords(nextCoords);
+      sound.playTick();
+      evaluateSequence(nextCoords);
+    }
   };
 
   const handlePointerUpGrid = () => {

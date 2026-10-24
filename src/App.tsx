@@ -206,6 +206,19 @@ export default function App() {
       setRoomState(state);
     });
 
+    // 3b. Listen to persistent top-level global leaderboard in Firebase RTDB
+    const unsubGlobal = firebaseSync.listenToGlobalLeaderboard((remoteGlobalScores) => {
+      if (remoteGlobalScores && Object.keys(remoteGlobalScores).length > 0) {
+        setRoomState((prev) => ({
+          ...prev,
+          globalScores: {
+            ...(prev.globalScores || {}),
+            ...remoteGlobalScores
+          }
+        }));
+      }
+    });
+
     const unsubFirebase = firebaseSync.listenToRoom(roomState.roomCode, (firebaseState) => {
       setRoomState((prev) => {
         const curPlayer = myPlayerRef.current;
@@ -310,6 +323,7 @@ export default function App() {
 
     return () => {
       unsubConn();
+      unsubGlobal();
       unsubFirebase();
       unsubApi();
     };
@@ -498,6 +512,7 @@ export default function App() {
                       totalScore: (existingGlobal.totalScore || 0) + 25,
                       lastActive: Date.now()
                     };
+                    firebaseSync.updateGlobalScore(pl.name, pl.avatar || '🚀', 25);
                   }
                 }
               }
@@ -706,6 +721,15 @@ export default function App() {
         isCorrect
       );
 
+      // Persist global score delta to top-level RTDB globalLeaderboard node
+      if (scoreDelta !== 0) {
+        firebaseSync.updateGlobalScore(
+          playerName,
+          existingPlayer.avatar || '🚀',
+          scoreDelta
+        );
+      }
+
       return updatedState;
     });
   };
@@ -893,6 +917,7 @@ export default function App() {
             lastActive: Date.now()
           }
         };
+        firebaseSync.updateGlobalScore(artist.name, artist.avatar || '🚀', 25);
       }
 
       const updated: RoomState = {
@@ -920,6 +945,8 @@ export default function App() {
   const handleStartGame = () => {
     if (roomState.questions.length === 0) return;
     const duration = roomState.questions[0]?.timeLimit || 25;
+
+    firebaseSync.recordGamePlayedForStudents(Object.values(roomState.players || {}));
 
     setRoomState((prev) => {
       // Increment gamesPlayed for all currently connected students in globalScores
@@ -1775,14 +1802,12 @@ export default function App() {
                   type="button"
                   onClick={() => {
                     if (window.confirm("Sei sicuro di voler azzerare la Classifica Generale cumulativa di tutti i FlipQuizLive? I punti verranno riazzerati.")) {
+                      firebaseSync.clearGlobalLeaderboard();
                       setRoomState((prev) => {
                         const updated: RoomState = {
                           ...prev,
                           globalScores: {}
                         };
-                        try {
-                          localStorage.removeItem('flipquiz_global_scores');
-                        } catch (e) {}
                         firebaseSync.pushRoomState(updated);
                         api.broadcastLocal(updated);
                         return updated;
