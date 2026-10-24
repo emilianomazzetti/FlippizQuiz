@@ -1,3 +1,4 @@
+import React, { useState, useEffect } from 'react';
 import { Settings, Check, Music, Pause, Play, Volume2, Users, Trash2 } from 'lucide-react';
 import { RoomState } from '../types/quiz';
 import { sound } from '../utils/audio';
