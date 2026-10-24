@@ -959,38 +959,6 @@ export const TeacherMonitor: React.FC<TeacherMonitorProps> = ({
 
   return (
     <div className="w-full min-h-[85vh] flex flex-col justify-between text-slate-100">
-      {/* Top Classroom Bar (Only visible during active question/podium phases, since in lobby it's placed at bottom) */}
-      {roomState.phase !== 'lobby' && (
-        <div
-          style={{ width: '500px', maxWidth: '100%' }}
-          className="flex flex-wrap items-center justify-between gap-3 p-4 bg-slate-900/95 border border-slate-800 rounded-2xl shadow-xl backdrop-blur-md mb-6 w-[500px] max-w-full mx-auto"
-        >
-          <div className="flex items-center gap-4">
-            <div className="px-3 py-1.5 rounded-xl bg-gradient-to-r from-indigo-500 to-purple-600 font-black text-sm tracking-widest text-white shadow">
-              {roomState.roomCode}
-            </div>
-            <div>
-              <h1 className="font-extrabold text-lg text-white">FlipQuiz Live Monitor</h1>
-              <p className="text-xs text-slate-400">Schermo Proiezione Docente / LIM</p>
-            </div>
-          </div>
-
-          {isGameRunning && (
-            <div className="flex flex-wrap items-center gap-2.5">
-              {/* Termina Gara Button */}
-              <button
-                onClick={onTerminateGame}
-                className="px-3.5 py-2 rounded-xl bg-gradient-to-r from-rose-600 to-red-700 hover:from-rose-500 hover:to-red-600 text-white font-black text-xs flex items-center gap-1.5 shadow-lg shadow-rose-950/40 transition-transform active:scale-95 cursor-pointer animate-pulse"
-                title="Termina immediatamente la gara e mostra il podio finale"
-              >
-                <Flag className="w-4 h-4 fill-white" />
-                Termina Gara
-              </button>
-            </div>
-          )}
-        </div>
-      )}
-
       {/* Main Classroom Screen Content */}
       <div className="flex-1 flex flex-col items-center justify-center p-2">
         {/* PHASE 1: LOBBY & REPOSITORY */}

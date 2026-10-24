@@ -312,12 +312,20 @@ export const firebaseSync = {
     return success;
   },
 
-  // Student joining room: register player in Firebase
+  // Student joining room: register player in Firebase with onDisconnect removal
   async joinPlayer(roomCode: string, player: Player): Promise<boolean> {
     const cleanCode = roomCode.replace(/[^a-zA-Z0-9_-]/g, '');
     try {
       const playerRef = ref(rtdb, `rooms/${cleanCode}/players/${player.id}`);
       await set(playerRef, cleanPayload(player));
+
+      // Automatically remove student from RTDB when browser/tab closes
+      try {
+        onDisconnect(playerRef).remove();
+      } catch (err) {
+        console.warn('onDisconnect player error:', err);
+      }
+
       notifyConnectionChange(true);
       return true;
     } catch (e) {
@@ -369,17 +377,9 @@ export const firebaseSync = {
     return false;
   },
 
-  // Attach teacher presence trigger via onDisconnect
+  // Attach teacher presence (no-op to prevent player disconnects from closing room)
   attachTeacherPresence(roomCode: string) {
-    const cleanCode = roomCode.replace(/[^a-zA-Z0-9_-]/g, '');
-    try {
-      const phaseRef = ref(rtdb, `rooms/${cleanCode}/phase`);
-      const closedRef = ref(rtdb, `rooms/${cleanCode}/teacherClosed`);
-      onDisconnect(phaseRef).set('closed');
-      onDisconnect(closedRef).set(true);
-    } catch (e) {
-      console.warn('attachTeacherPresence error:', e);
-    }
+    // No-op
   },
 
   // Explicitly close room when teacher exits

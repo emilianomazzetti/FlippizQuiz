@@ -86,12 +86,19 @@ export default function App() {
     myPlayerRef.current = myPlayer;
   }, [myPlayer]);
 
-  // Room PIN from URL if scanned via QR code
-  const [initialPin, setInitialPin] = useState<string>('FLIP-101');
+  // Room PIN from URL if scanned via QR code or generated randomly for new teacher session
+  const [initialPin, setInitialPin] = useState<string>(() => {
+    if (typeof window !== 'undefined') {
+      const searchParams = new URLSearchParams(window.location.search);
+      const pinParam = searchParams.get('pin');
+      if (pinParam) return pinParam.toUpperCase();
+    }
+    return `FLIP-${Math.floor(100 + Math.random() * 900)}`;
+  });
 
   // Core Room State
   const [roomState, setRoomState] = useState<RoomState>({
-    roomCode: 'FLIP-101',
+    roomCode: initialPin,
     roomName: 'Classe 3B • Scienze e Storia',
     phase: 'lobby',
     currentQuestionIndex: 0,
@@ -238,9 +245,20 @@ export default function App() {
           ...(firebaseState.deletedQuestionIds || [])
         ]);
 
-        const filteredQuestions = (firebaseState.questions || []).filter(
-          (q) => q && q.id && !combinedDeleted.has(q.id)
+        const activePlayerNames = new Set(
+          Object.values(mergedPlayers).map((p) => p.name.trim().toLowerCase())
         );
+        const activePlayerIds = new Set(Object.keys(mergedPlayers));
+
+        const filteredQuestions = (firebaseState.questions || []).filter((q) => {
+          if (!q || !q.id || combinedDeleted.has(q.id)) return false;
+          const creator = (q.creatorName || '').trim().toLowerCase();
+          if (creator === 'docente' || creator === 'insegnante' || creator === 'maestro' || !creator) return true;
+          const isConnected =
+            activePlayerNames.has(creator) ||
+            (Boolean((q as any).creatorId) && activePlayerIds.has((q as any).creatorId));
+          return isConnected;
+        });
 
         return {
           ...firebaseState,
