@@ -677,14 +677,12 @@ export const firebaseSync = {
       const unsub = onValue(
         globalRef,
         (snap) => {
-          if (snap.exists()) {
-            notifyConnectionChange(true);
-            const val = snap.val() || {};
-            onUpdate(val);
-            try {
-              localStorage.setItem('flipquiz_global_scores', JSON.stringify(val));
-            } catch (e) {}
-          }
+          notifyConnectionChange(true);
+          const val = snap.val() || {};
+          onUpdate(val);
+          try {
+            localStorage.setItem('flipquiz_global_scores', JSON.stringify(val));
+          } catch (e) {}
         },
         (err) => {
           console.warn('listenToGlobalLeaderboard error:', err.message);
