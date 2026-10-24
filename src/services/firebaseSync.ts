@@ -101,9 +101,17 @@ export function sanitizeRoomState(data: any, fallback?: RoomState): RoomState {
     ? data.questions
     : (data.questions && typeof data.questions === 'object' ? Object.values(data.questions) : null);
 
-  const initialQuestions: Question[] = rawQuestions !== null
+  const deletedIds = new Set<string>(
+    Array.isArray(data.deletedQuestionIds)
+      ? data.deletedQuestionIds
+      : (fallback?.deletedQuestionIds || [])
+  );
+
+  const rawList: Question[] = rawQuestions !== null
     ? (rawQuestions as Question[])
     : (fallback?.questions || []);
+
+  const initialQuestions: Question[] = rawList.filter((q) => q && q.id && !deletedIds.has(q.id));
 
   const questions: Question[] = initialQuestions.map((q) => {
     if (!q || typeof q !== 'object') return q;
@@ -162,6 +170,8 @@ export function sanitizeRoomState(data: any, fallback?: RoomState): RoomState {
     turnDuration: typeof data.turnDuration === 'number' ? data.turnDuration : 25,
     resetEpoch: typeof data.resetEpoch === 'number' ? data.resetEpoch : fallback?.resetEpoch,
     kickedPlayerIds: Array.isArray(data.kickedPlayerIds) ? data.kickedPlayerIds : (fallback?.kickedPlayerIds || []),
+    deletedQuestionIds: Array.from(deletedIds),
+    teacherClosed: typeof data.teacherClosed === 'boolean' ? data.teacherClosed : !!fallback?.teacherClosed,
     settings: {
       basePoints: data.settings?.basePoints ?? fallback?.settings?.basePoints ?? 50,
       fastFingerBonus1: data.settings?.fastFingerBonus1 ?? fallback?.settings?.fastFingerBonus1 ?? 20,
@@ -324,17 +334,95 @@ export const firebaseSync = {
     }
   },
 
+  // Delete question permanently from RTDB and update deletedQuestionIds
+  async deleteQuestion(roomCode: string, qId: string): Promise<boolean> {
+    const cleanCode = roomCode.replace(/[^a-zA-Z0-9_-]/g, '');
+    try {
+      const roomRef = ref(rtdb, `rooms/${cleanCode}`);
+      const snap = await get(roomRef);
+      if (snap.exists()) {
+        const val = snap.val();
+        const existingQs: Question[] = Array.isArray(val.questions)
+          ? val.questions
+          : val.questions && typeof val.questions === 'object'
+          ? Object.values(val.questions)
+          : [];
+        const filtered = existingQs.filter((q) => q && q.id !== qId);
+        const existingDeleted: string[] = Array.isArray(val.deletedQuestionIds) ? val.deletedQuestionIds : [];
+        const newDeleted = Array.from(new Set([...existingDeleted, qId]));
+
+        await update(roomRef, {
+          questions: filtered,
+          deletedQuestionIds: newDeleted
+        });
+        notifyConnectionChange(true);
+        return true;
+      }
+    } catch (e) {
+      console.warn('firebaseSync.deleteQuestion error:', e);
+    }
+    return false;
+  },
+
+  // Attach teacher presence trigger via onDisconnect
+  attachTeacherPresence(roomCode: string) {
+    const cleanCode = roomCode.replace(/[^a-zA-Z0-9_-]/g, '');
+    try {
+      const phaseRef = ref(rtdb, `rooms/${cleanCode}/phase`);
+      const closedRef = ref(rtdb, `rooms/${cleanCode}/teacherClosed`);
+      onDisconnect(phaseRef).set('closed');
+      onDisconnect(closedRef).set(true);
+    } catch (e) {
+      console.warn('attachTeacherPresence error:', e);
+    }
+  },
+
+  // Explicitly close room when teacher exits
+  async closeRoom(roomCode: string): Promise<boolean> {
+    const cleanCode = roomCode.replace(/[^a-zA-Z0-9_-]/g, '');
+    try {
+      const roomRef = ref(rtdb, `rooms/${cleanCode}`);
+      await update(roomRef, {
+        phase: 'closed',
+        teacherClosed: true,
+        players: {}
+      });
+      return true;
+    } catch (e) {
+      console.warn('closeRoom error:', e);
+      return false;
+    }
+  },
+
   // Student submitting question: add to repository
   async submitQuestion(roomCode: string, question: Question): Promise<boolean> {
     const cleanCode = roomCode.replace(/[^a-zA-Z0-9_-]/g, '');
     try {
-      const questionsRef = ref(rtdb, `rooms/${cleanCode}/questions`);
-      const snap = await get(questionsRef);
-      const existing: Question[] = snap.exists() ? snap.val() : [];
-      const updated = [cleanPayload(question), ...existing];
-      await set(questionsRef, updated);
-      notifyConnectionChange(true);
-      return true;
+      const roomRef = ref(rtdb, `rooms/${cleanCode}`);
+      const snap = await get(roomRef);
+      if (snap.exists()) {
+        const val = snap.val();
+        const existing: Question[] = Array.isArray(val.questions)
+          ? val.questions
+          : val.questions && typeof val.questions === 'object'
+          ? Object.values(val.questions)
+          : [];
+        const existingDeleted: string[] = Array.isArray(val.deletedQuestionIds) ? val.deletedQuestionIds : [];
+        const cleanedDeleted = existingDeleted.filter((id) => id !== question.id);
+        const updated = [cleanPayload(question), ...existing.filter((q) => q && q.id !== question.id)];
+
+        await update(roomRef, {
+          questions: updated,
+          deletedQuestionIds: cleanedDeleted
+        });
+        notifyConnectionChange(true);
+        return true;
+      } else {
+        const questionsRef = ref(rtdb, `rooms/${cleanCode}/questions`);
+        await set(questionsRef, [cleanPayload(question)]);
+        notifyConnectionChange(true);
+        return true;
+      }
     } catch (e) {
       console.warn('submitQuestion error:', e);
       return false;

@@ -114,6 +114,30 @@ export const api = {
     return false;
   },
 
+  async deleteQuestion(qId: string): Promise<boolean> {
+    try {
+      const res = await fetch('/api/room/question/delete', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ qId })
+      });
+      return res.ok;
+    } catch (e) {
+      console.warn('API deleteQuestion failed:', e);
+    }
+    return false;
+  },
+
+  async closeRoom(): Promise<boolean> {
+    try {
+      const res = await fetch('/api/room/close', { method: 'POST' });
+      return res.ok;
+    } catch (e) {
+      console.warn('API closeRoom failed:', e);
+    }
+    return false;
+  },
+
   async startGame(): Promise<boolean> {
     try {
       const res = await fetch('/api/room/start', { method: 'POST' });

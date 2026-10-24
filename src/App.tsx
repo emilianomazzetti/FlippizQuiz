@@ -221,8 +221,19 @@ export default function App() {
           }
         }
 
+        const combinedDeleted = new Set([
+          ...(prev.deletedQuestionIds || []),
+          ...(firebaseState.deletedQuestionIds || [])
+        ]);
+
+        const filteredQuestions = (firebaseState.questions || []).filter(
+          (q) => q && q.id && !combinedDeleted.has(q.id)
+        );
+
         return {
           ...firebaseState,
+          questions: filteredQuestions,
+          deletedQuestionIds: Array.from(combinedDeleted),
           players: mergedPlayers,
           answersThisTurn: firebaseState.answersThisTurn || {},
           drawingsThisTurn: firebaseState.drawingsThisTurn || {}
@@ -230,9 +241,22 @@ export default function App() {
       });
     }, roomState);
 
-    // 4. Same-tab BroadcastChannel sync for multi-tab
+    // 4. Same-tab BroadcastChannel and SSE sync for multi-tab
     const unsubApi = api.subscribeToRoom((serverState) => {
-      setRoomState(serverState);
+      setRoomState((prev) => {
+        const combinedDeleted = new Set([
+          ...(prev.deletedQuestionIds || []),
+          ...(serverState.deletedQuestionIds || [])
+        ]);
+        const filteredQuestions = (serverState.questions || []).filter(
+          (q) => q && q.id && !combinedDeleted.has(q.id)
+        );
+        return {
+          ...serverState,
+          questions: filteredQuestions,
+          deletedQuestionIds: Array.from(combinedDeleted)
+        };
+      });
     });
 
     return () => {
@@ -242,13 +266,24 @@ export default function App() {
     };
   }, []);
 
-  // Listen for student closing tab / browser to remove them from active players
+  // Listen for teacher / student closing tab / browser
   useEffect(() => {
-    if (!myPlayerId || !roomState.roomCode) return;
+    if (!roomState.roomCode) return;
+
+    if (viewRole === 'teacher') {
+      firebaseSync.attachTeacherPresence(roomState.roomCode);
+    }
 
     const handleDisconnect = () => {
-      firebaseSync.removePlayer(roomState.roomCode, myPlayerId);
-      api.leave(myPlayerId);
+      if (viewRole === 'teacher') {
+        // Teacher closing browser: close the room completely so students are disconnected
+        firebaseSync.closeRoom(roomState.roomCode);
+        api.closeRoom();
+      } else if (myPlayerId) {
+        // Student closing browser: remove student
+        firebaseSync.removePlayer(roomState.roomCode, myPlayerId);
+        api.leave(myPlayerId);
+      }
     };
 
     window.addEventListener('beforeunload', handleDisconnect);
@@ -256,7 +291,7 @@ export default function App() {
     return () => {
       window.removeEventListener('beforeunload', handleDisconnect);
     };
-  }, [myPlayerId, roomState.roomCode]);
+  }, [myPlayerId, roomState.roomCode, viewRole]);
 
   // Keep myPlayer score and streak in sync with roomState.players
   const activeStudent: Player | null =
@@ -398,6 +433,21 @@ export default function App() {
         }
       }
 
+      // Ensure all connected players who didn't submit in time get recorded with 0 points / not correct
+      Object.keys(finalPlayers).forEach((pId) => {
+        if (!finalAnswers[pId]) {
+          finalAnswers[pId] = {
+            playerId: pId,
+            playerName: finalPlayers[pId].name,
+            submittedAt: Date.now(),
+            isCorrect: false,
+            timeSpent: currentQ?.timeLimit || 30,
+            pointsAwarded: 0,
+            answerPayload: currentQ?.type === 'word_search' ? { count: 0, foundWords: [] } : undefined
+          };
+        }
+      });
+
       const updated: RoomState = {
         ...prev,
         answersThisTurn: finalAnswers,
@@ -457,15 +507,24 @@ export default function App() {
       }
 
       // Point calculation:
+      // Point calculation:
       // 1. Word Builder: basePoints + totalLetters used (1 letter = 1 point)
       // 2. Longest Word: basePoints + word length (1 letter = 1 point) + potential +25 bonus at end of round
       // 3. Mole Whack: basePoints + mole hits score
-      // 4. Word Search (Crucipuzzle): partial points for each word found!
+      // 4. Word Search (Crucipuzzle):
+      //    User requirement: exactly 5 points per word found.
+      //    Finding at least 1 word passes the trial (isCorrect: true).
+      //    Finding 0 words or time expiring: 0 points and failed trial (isCorrect: false).
       // 5. Standard: basePoints + speed bonus
       let pointsAwarded = 0;
-      const hasWordSearchProgress = isWordSearch && (payload?.count > 0 || (payload?.foundWords && payload.foundWords.length > 0));
+      let roundPassed = isCorrect;
 
-      if (isCorrect || hasWordSearchProgress) {
+      if (isWordSearch) {
+        const foundWords: string[] = payload?.foundWords || [];
+        const count = payload?.count ?? foundWords.length ?? 0;
+        pointsAwarded = count * 5;
+        roundPassed = count > 0;
+      } else if (isCorrect) {
         if (isWordBuilder) {
           const totalLetters =
             payload?.totalLetters !== undefined
@@ -485,13 +544,6 @@ export default function App() {
             payload?.totalMolePoints ??
             Math.max(0, ((payload?.correctCount || 0) * 10) - ((payload?.wrongCount || 0) * 10));
           pointsAwarded = basePoints + moleScore;
-        } else if (isWordSearch) {
-          const wordsToFind = (currentQ.content as any)?.words || [];
-          const totalWords = Math.max(1, wordsToFind.length);
-          const foundWords: string[] = payload?.foundWords || [];
-          const count = payload?.count ?? foundWords.length ?? (payload?.foundAll ? totalWords : 0);
-          const pointsPerWord = Math.max(10, Math.round(basePoints / totalWords));
-          pointsAwarded = count * pointsPerWord + (count === totalWords ? bonus : 0);
         } else {
           pointsAwarded = basePoints + bonus;
         }
@@ -504,7 +556,7 @@ export default function App() {
         playerId,
         playerName,
         submittedAt: Date.now(),
-        isCorrect: isCorrect || hasWordSearchProgress,
+        isCorrect: roundPassed,
         timeSpent,
         pointsAwarded,
         speedRank: existingSubmission?.speedRank || speedRank,
@@ -531,7 +583,7 @@ export default function App() {
         [playerId]: {
           ...existingPlayer,
           score: Math.max(0, existingPlayer.score + scoreDelta),
-          streak: isCorrect ? existingPlayer.streak + (existingSubmission ? 0 : 1) : 0
+          streak: roundPassed ? existingPlayer.streak + (existingSubmission ? 0 : 1) : 0
         }
       };
 
@@ -606,9 +658,14 @@ export default function App() {
   // Student submitting new question to repository
   const handleSubmitQuestion = (question: Question) => {
     setRoomState((prev) => {
+      const cleanDeleted = (prev.deletedQuestionIds || []).filter((id) => id !== question.id);
+      const filteredExisting = prev.questions.filter(
+        (q) => q && q.id && q.id !== question.id && !cleanDeleted.includes(q.id)
+      );
       const updated: RoomState = {
         ...prev,
-        questions: [question, ...prev.questions]
+        deletedQuestionIds: cleanDeleted,
+        questions: [question, ...filteredExisting]
       };
       api.broadcastLocal(updated);
       return updated;
@@ -908,14 +965,19 @@ export default function App() {
   const handleDeleteQuestion = (qId: string) => {
     setRoomState((prev) => {
       const updatedQuestions = prev.questions.filter((q) => q.id !== qId);
+      const updatedDeletedIds = Array.from(new Set([...(prev.deletedQuestionIds || []), qId]));
       const updated: RoomState = {
         ...prev,
-        questions: updatedQuestions
+        questions: updatedQuestions,
+        deletedQuestionIds: updatedDeletedIds
       };
       firebaseSync.pushRoomState(updated);
       api.broadcastLocal(updated);
       return updated;
     });
+
+    firebaseSync.deleteQuestion(roomState.roomCode, qId);
+    api.deleteQuestion(qId);
   };
 
   // Teacher kicking out a student (kick out)
@@ -1205,7 +1267,6 @@ export default function App() {
             onSubmitAnswer={handleSubmitAnswer}
             onSaveDrawing={handleSaveDrawing}
             onVoteDrawing={handleVoteDrawing}
-            onStartQuiz={handleStartGame}
           />
         )}
       </main>

@@ -189,7 +189,8 @@ export type GamePhase =
   | 'question_results'  // Correct answer + fast fingers podium
   | 'draw_gallery'      // For drawing question: gallery & star voting
   | 'leaderboard'       // Standings after turn
-  | 'podium';           // Final game over podium
+  | 'podium'            // Final game over podium
+  | 'closed';           // Teacher closed the browser/session
 
 export interface RoomSettings {
   basePoints: number;
@@ -214,4 +215,6 @@ export interface RoomState {
   settings: RoomSettings;
   resetEpoch?: number;
   kickedPlayerIds?: string[];
+  deletedQuestionIds?: string[];
+  teacherClosed?: boolean;
 }

@@ -32,6 +32,8 @@ let roomState: RoomState = {
   drawingsThisTurn: {},
   turnStartTime: 0,
   turnDuration: 25,
+  deletedQuestionIds: [],
+  teacherClosed: false,
   settings: {
     basePoints: 50,
     fastFingerBonus1: 20,
@@ -117,9 +119,35 @@ app.post('/api/room/question', (req: Request, res: Response) => {
     return res.status(400).json({ error: 'Dati domanda non validi' });
   }
 
-  roomState.questions.unshift(question);
+  // Remove from deleted list if re-added
+  if (roomState.deletedQuestionIds) {
+    roomState.deletedQuestionIds = roomState.deletedQuestionIds.filter((id) => id !== question.id);
+  }
+
+  // Prevent duplicate and add to front
+  roomState.questions = [question, ...roomState.questions.filter((q) => q.id !== question.id)];
   broadcastState();
   res.json({ success: true, count: roomState.questions.length });
+});
+
+app.post('/api/room/question/delete', (req: Request, res: Response) => {
+  const { qId } = req.body;
+  if (!qId) {
+    return res.status(400).json({ error: 'ID domanda mancante' });
+  }
+
+  roomState.questions = roomState.questions.filter((q) => q.id !== qId);
+  roomState.deletedQuestionIds = Array.from(new Set([...(roomState.deletedQuestionIds || []), qId]));
+  broadcastState();
+  res.json({ success: true, count: roomState.questions.length, deletedId: qId });
+});
+
+app.post('/api/room/close', (_req: Request, res: Response) => {
+  roomState.phase = 'closed';
+  roomState.teacherClosed = true;
+  roomState.players = {};
+  broadcastState();
+  res.json({ success: true });
 });
 
 app.post('/api/room/start', (_req: Request, res: Response) => {

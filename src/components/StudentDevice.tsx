@@ -44,7 +44,6 @@ interface StudentDeviceProps {
   onSubmitAnswer: (isCorrect: boolean, payload?: any) => void;
   onSaveDrawing: (dataUrl: string) => void;
   onVoteDrawing: (targetPlayerId: string) => void;
-  onStartQuiz?: () => void;
 }
 
 const AVATARS = ['🚀', '🦊', '⚡', '🦁', '🐼', '🎨', '🌟', '🎯', '🦉', '🐬', '🏆', '🍕'];
@@ -58,8 +57,7 @@ export const StudentDevice: React.FC<StudentDeviceProps> = ({
   onSubmitQuestion,
   onSubmitAnswer,
   onSaveDrawing,
-  onVoteDrawing,
-  onStartQuiz
+  onVoteDrawing
 }) => {
   // Join form state
   const [name, setName] = useState('');
@@ -68,24 +66,8 @@ export const StudentDevice: React.FC<StudentDeviceProps> = ({
   const [activeTab, setActiveTab] = useState<'play' | 'create'>('create');
   const [hasCreatedQuestion, setHasCreatedQuestion] = useState(false);
 
+  // Fullscreen state: ONLY toggled when user clicks the dedicated button!
   const { isFullscreen, isSupported, enter: enterFullscreen, exit: exitFullscreen, toggle: toggleFullscreen } = useFullscreen();
-
-  // Tablet auto-fullscreen: attempt to trigger fullscreen on any user tap/touch interaction if not already fullscreen
-  useEffect(() => {
-    const handleFirstUserInteraction = () => {
-      if (!isAppFullscreen() && isFullscreenSupported()) {
-        requestAppFullscreen().catch(() => {});
-      }
-    };
-
-    window.addEventListener('touchend', handleFirstUserInteraction, { passive: true });
-    window.addEventListener('click', handleFirstUserInteraction, { passive: true });
-
-    return () => {
-      window.removeEventListener('touchend', handleFirstUserInteraction);
-      window.removeEventListener('click', handleFirstUserInteraction);
-    };
-  }, []);
 
   useEffect(() => {
     if (initialPin) setPin(initialPin);
@@ -198,11 +180,6 @@ export const StudentDevice: React.FC<StudentDeviceProps> = ({
     const cleanName = name.trim();
     if (!cleanName) return;
 
-    // Forzare Schermo Intero su Tablet / Smartphone
-    if (!isAppFullscreen() && isFullscreenSupported()) {
-      requestAppFullscreen().catch(() => {});
-    }
-
     // Check duplicate student name (case-insensitive)
     const existingPlayers = Object.values(roomState.players || {});
     const isDuplicate = existingPlayers.some(
@@ -220,35 +197,52 @@ export const StudentDevice: React.FC<StudentDeviceProps> = ({
 
   const handleCreatedQuestion = (q: Question) => {
     if (hasActiveQuestion) return; // Only 1 question allowed per student
-    if (!isAppFullscreen() && isFullscreenSupported()) {
-      requestAppFullscreen().catch(() => {});
-    }
     onSubmitQuestion(q);
     setHasCreatedQuestion(true);
     setQuestionWasDeletedNotice(false);
     setActiveTab('play'); // Immediately navigate to "Stato Attesa Quiz"
   };
 
-  const handleAnswerWithFs = (isCorrect: boolean, payload?: any) => {
-    if (!isAppFullscreen() && isFullscreenSupported()) {
-      requestAppFullscreen().catch(() => {});
-    }
+  const handleAnswer = (isCorrect: boolean, payload?: any) => {
     onSubmitAnswer(isCorrect, payload);
   };
 
-  const handleSaveDrawingWithFs = (dataUrl: string) => {
-    if (!isAppFullscreen() && isFullscreenSupported()) {
-      requestAppFullscreen().catch(() => {});
-    }
+  const handleSaveDrawing = (dataUrl: string) => {
     onSaveDrawing(dataUrl);
   };
 
-  const handleVoteDrawingWithFs = (targetPlayerId: string) => {
-    if (!isAppFullscreen() && isFullscreenSupported()) {
-      requestAppFullscreen().catch(() => {});
-    }
+  const handleVoteDrawing = (targetPlayerId: string) => {
     onVoteDrawing(targetPlayerId);
   };
+
+  // 0. TEACHER CLOSED ROOM: Show closed screen
+  if (roomState.phase === 'closed' || roomState.teacherClosed) {
+    return (
+      <div className="w-full max-w-md mx-auto p-8 bg-slate-900 border-2 border-rose-500/50 rounded-3xl shadow-2xl text-center space-y-5 animate-fade-in my-8 text-slate-100">
+        <div className="w-16 h-16 mx-auto rounded-3xl bg-rose-500/20 border border-rose-500/40 flex items-center justify-center text-3xl shadow-lg">
+          🔒
+        </div>
+        <div className="space-y-2">
+          <h2 className="text-2xl font-black text-white">Sessione Chiusa dal Docente</h2>
+          <p className="text-sm text-slate-300">
+            Il docente ha chiuso il browser o ha terminato la sessione della classe. La stanza di FlipQuiz è stata chiusa.
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={() => {
+            try {
+              localStorage.removeItem('flipquiz_my_player');
+            } catch (e) {}
+            window.location.reload();
+          }}
+          className="w-full py-3.5 bg-indigo-600 hover:bg-indigo-500 text-white font-black text-sm rounded-2xl shadow-lg transition-transform active:scale-95 cursor-pointer"
+        >
+          Ritorna alla Schermata Iniziale
+        </button>
+      </div>
+    );
+  }
 
   // 1. NOT LOGGED IN: Join Screen
   if (!activePlayer) {
@@ -365,9 +359,6 @@ export const StudentDevice: React.FC<StudentDeviceProps> = ({
           <button
             type="button"
             onClick={() => {
-              if (!isAppFullscreen() && isFullscreenSupported()) {
-                requestAppFullscreen().catch(() => {});
-              }
               const testNames = ['Matteo B.', 'Sofia L.', 'Lorenzo T.', 'Chiara M.', 'Alessandro G.'];
               const randomName = testNames[Math.floor(Math.random() * testNames.length)];
               onJoinRoom(randomName, selectedAvatar, pin.trim() || 'FLIP-101');
@@ -564,19 +555,6 @@ export const StudentDevice: React.FC<StudentDeviceProps> = ({
               La tua domanda è stata inserita con successo nel repository della classe!
             </div>
           ) : null}
-
-          {onStartQuiz && (
-            <div className="pt-4 border-t border-slate-800">
-              <button
-                type="button"
-                onClick={onStartQuiz}
-                className="w-full py-3.5 px-4 rounded-2xl bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-400 hover:to-teal-500 font-black text-sm text-white shadow-lg flex items-center justify-center gap-2 transition-transform active:scale-95"
-              >
-                <Sparkles className="w-4 h-4" />
-                Avvia FlipQuiz Live Subito (Test Risposte)
-              </button>
-            </div>
-          )}
         </div>
       )}
 
@@ -633,13 +611,13 @@ export const StudentDevice: React.FC<StudentDeviceProps> = ({
               <>
                 <QuestionRenderer
                   question={currentQ}
-                  onAnswer={handleAnswerWithFs}
+                  onAnswer={handleAnswer}
                   disabled={isContinuousGame ? (timeRemaining <= 0 && (!roomState.turnStartTime || Date.now() - roomState.turnStartTime > 2000)) : myAnswer !== null}
                   myPlayerId={activePlayer.id}
                   drawings={roomState.drawingsThisTurn || {}}
                   isGalleryMode={false}
-                  onSaveDrawing={handleSaveDrawingWithFs}
-                  onVoteDrawing={handleVoteDrawingWithFs}
+                  onSaveDrawing={handleSaveDrawing}
+                  onVoteDrawing={handleVoteDrawing}
                 />
 
                 {currentQ.type === 'draw_vote' ? (
@@ -758,8 +736,8 @@ export const StudentDevice: React.FC<StudentDeviceProps> = ({
           myPlayerId={activePlayer.id}
           drawings={roomState.drawingsThisTurn || {}}
           isGalleryMode={true}
-          onSaveDrawing={handleSaveDrawingWithFs}
-          onVoteDrawing={handleVoteDrawingWithFs}
+          onSaveDrawing={handleSaveDrawing}
+          onVoteDrawing={handleVoteDrawing}
         />
       )}
 

@@ -55,8 +55,8 @@ export const WordSearchPlayer: React.FC<WordSearchPlayerProps> = ({
       ]);
       setSelectedCoords([]);
 
-      // Inform parent about each word found immediately, with partial points!
-      onAnswer(nextFound.length === wordsToFind.length, {
+      // Inform parent about each word found immediately (+5 pt for each word found!)
+      onAnswer(nextFound.length > 0, {
         foundWords: nextFound,
         totalWords: wordsToFind.length,
         count: nextFound.length,

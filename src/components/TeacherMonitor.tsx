@@ -190,7 +190,8 @@ export const TeacherMonitor: React.FC<TeacherMonitorProps> = ({
       currentQ?.type !== 'draw_vote' &&
       currentQ?.type !== 'word_builder' &&
       currentQ?.type !== 'longest_word' &&
-      currentQ?.type !== 'mole_whack'
+      currentQ?.type !== 'mole_whack' &&
+      currentQ?.type !== 'word_search'
     ) {
       const allConnectedHaveAnswered =
         playersList.length > 0 &&
@@ -1821,9 +1822,9 @@ export const TeacherMonitor: React.FC<TeacherMonitorProps> = ({
 
       {/* Teacher Configuration Modal */}
       {isConfigOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fade-in">
-          <div className="bg-slate-900 border border-slate-700 w-full max-w-lg rounded-3xl p-6 shadow-2xl space-y-6">
-            <div className="flex items-center justify-between border-b border-slate-800 pb-4">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/85 backdrop-blur-sm animate-fade-in">
+          <div className="bg-slate-900 border border-slate-700 w-full max-w-lg rounded-3xl p-5 sm:p-6 shadow-2xl flex flex-col max-h-[88vh] overflow-hidden">
+            <div className="flex items-center justify-between border-b border-slate-800 pb-3 shrink-0">
               <div className="flex items-center gap-3">
                 <div className="p-2 bg-indigo-500/20 text-indigo-400 rounded-xl">
                   <Settings className="w-5 h-5" />
@@ -1835,13 +1836,13 @@ export const TeacherMonitor: React.FC<TeacherMonitorProps> = ({
               </div>
               <button
                 onClick={() => setIsConfigOpen(false)}
-                className="text-slate-400 hover:text-white cursor-pointer"
+                className="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800 transition-colors cursor-pointer"
               >
                 ✕
               </button>
             </div>
 
-            <div className="space-y-4">
+            <div className="space-y-4 overflow-y-auto pr-2 my-3 flex-1 scrollbar-thin scrollbar-thumb-slate-700">
               {/* Question Target Selector */}
               <div>
                 <label className="text-xs font-bold text-slate-300 block mb-1">
@@ -2054,7 +2055,7 @@ export const TeacherMonitor: React.FC<TeacherMonitorProps> = ({
               )}
             </div>
 
-            <div className="flex justify-end gap-3 pt-4 border-t border-slate-800">
+            <div className="flex justify-end gap-3 pt-3 border-t border-slate-800 shrink-0">
               <button
                 type="button"
                 onClick={() => setIsConfigOpen(false)}
