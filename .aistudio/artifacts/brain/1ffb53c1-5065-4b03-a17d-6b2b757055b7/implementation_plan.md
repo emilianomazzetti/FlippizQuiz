@@ -125,3 +125,7 @@ Piano dettagliato per implementare la nuova attività didattica **"Becca la talp
 7. **`src/App.tsx`**:
    - Handler `handleKickPlayer(playerId)` che rimuove lo studente da `roomState.players` e cancella il record in Firebase RTDB.
    - Riconoscimento della disconnessione nel listener dello studente con reset immediato a schermata di login.
+   - Rimozione del pulsante ridondante "Configurazione Docente" dalla barra di navigazione superiore, mantenendo l'accesso alla configurazione direttamente dalle singole domande nel repository.
+
+8. **`src/components/TeacherMonitor.tsx`**:
+   - Rimozione del pulsante ridondante "Voce Benvenuto", mantenendo la riproduzione vocale automatica di benvenuto all'avvio dello schermo docente.

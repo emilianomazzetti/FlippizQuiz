@@ -257,8 +257,10 @@ export const BadgesModal: React.FC<BadgesModalProps> = ({
                   <h4 className="text-base font-extrabold text-white mt-1">
                     {selectedBadge.title}
                   </h4>
-                  <p className="text-xs text-slate-300 mt-0.5">
-                    {selectedBadge.description}
+                  <p className="text-xs text-amber-300 font-bold mt-0.5">
+                    {selectedBadge.isUnlocked
+                      ? `Hai vinto questo badge perché ${selectedBadge.description.toLowerCase()}`
+                      : `Per sbloccare questo badge: ${selectedBadge.description.toLowerCase()}`}
                   </p>
                 </div>
               </div>

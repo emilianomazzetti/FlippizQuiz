@@ -34,17 +34,26 @@ export const CellIdentifyPlayer: React.FC<CellIdentifyPlayerProps> = ({
     if (disabled || submitted || selectedCellIds.length === 0) return;
     setSubmitted(true);
 
-    // Valid if every correct cell is selected AND no incorrect cell is selected
     const correctIds = cells.filter((c: any) => c.isMatch).map((c: any) => c.id);
     const hasAllCorrect = correctIds.length > 0 && correctIds.every((id: string) => selectedCellIds.includes(id));
     const hasNoIncorrect = selectedCellIds.every((id: string) => correctIds.includes(id));
     const isCorrect = hasAllCorrect && hasNoIncorrect;
 
+    // Calculate score: +1 for each correct cell selected, -1 for each incorrect cell selected
+    let cellScore = 0;
+    selectedCellIds.forEach((id) => {
+      if (correctIds.includes(id)) {
+        cellScore += 1;
+      } else {
+        cellScore -= 1;
+      }
+    });
+
     const selectedTexts = cells
       .filter((c: any) => selectedCellIds.includes(c.id))
       .map((c: any) => c.text);
 
-    onAnswer(isCorrect, { selectedCellIds, selectedTexts });
+    onAnswer(isCorrect, { selectedCellIds, selectedTexts, cellScore });
   };
 
   return (

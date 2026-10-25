@@ -38,7 +38,6 @@ import {
   Maximize,
   Minimize,
   Tablet,
-  Settings,
   Volume2,
   VolumeX,
   Volume1,
@@ -561,8 +560,9 @@ export default function App() {
       const isWordBuilder = currentQ && currentQ.type === 'word_builder';
       const isLongestWord = currentQ && currentQ.type === 'longest_word';
       const isMoleWhack = currentQ && currentQ.type === 'mole_whack';
+      const isCellIdentify = currentQ && currentQ.type === 'cell_identify';
       const isWordSearch = currentQ && currentQ.type === 'word_search';
-      const isContinuous = isWordBuilder || isLongestWord || isMoleWhack || isWordSearch;
+      const isContinuous = isWordBuilder || isLongestWord || isMoleWhack || isWordSearch || isCellIdentify;
       const existingSubmission = prev.answersThisTurn[playerId];
 
       // For standard questions, don't allow duplicate submissions.
@@ -592,16 +592,6 @@ export default function App() {
         }
       }
 
-      // Point calculation:
-      // Point calculation:
-      // 1. Word Builder: basePoints + totalLetters used (1 letter = 1 point)
-      // 2. Longest Word: basePoints + word length (1 letter = 1 point) + potential +25 bonus at end of round
-      // 3. Mole Whack: basePoints + mole hits score
-      // 4. Word Search (Crucipuzzle):
-      //    User requirement: exactly 5 points per word found.
-      //    Finding at least 1 word passes the trial (isCorrect: true).
-      //    Finding 0 words or time expiring: 0 points and failed trial (isCorrect: false).
-      // 5. Standard: basePoints + speed bonus
       let pointsAwarded = 0;
       let roundPassed = isCorrect;
 
@@ -617,6 +607,10 @@ export default function App() {
         const questionBasePoints = foundAll ? basePoints : 0;
         pointsAwarded = wordPoints + questionBasePoints;
         roundPassed = count > 0;
+      } else if (isCellIdentify) {
+        const cellScore = payload?.cellScore ?? 0;
+        pointsAwarded = Math.max(0, basePoints + cellScore);
+        roundPassed = isCorrect || cellScore > 0;
       } else if (isCorrect) {
         if (isWordBuilder) {
           const totalLetters =
@@ -639,6 +633,12 @@ export default function App() {
           pointsAwarded = basePoints + moleScore;
         } else {
           pointsAwarded = basePoints + bonus;
+        }
+      } else {
+        if (isCellIdentify) {
+          const cellScore = payload?.cellScore ?? 0;
+          pointsAwarded = Math.max(0, basePoints + cellScore);
+          roundPassed = cellScore > 0;
         }
       }
 
@@ -1454,21 +1454,6 @@ export default function App() {
               <span className="hidden sm:inline">Guida</span>
             </button>
 
-            {/* Configurazione Docente Button (spostato in alto vicino a Schermo Intero) */}
-            {(!isLockedStudent || viewRole === 'teacher') && (
-              <button
-                type="button"
-                onClick={() => {
-                  setSelectedConfigQId('all');
-                  setIsTeacherConfigOpen(true);
-                }}
-                className="px-3 py-1.5 rounded-xl bg-slate-850 hover:bg-slate-800 border border-slate-700 text-xs font-bold text-indigo-300 hover:text-white flex items-center gap-1.5 transition-colors shadow-sm cursor-pointer"
-                title="Configurazione Docente (modifica tempi, punti e musica di sottofondo)"
-              >
-                <Settings className="w-3.5 h-3.5 text-indigo-400" />
-                <span className="hidden md:inline">Configurazione Docente</span>
-              </button>
-            )}
 
             {/* Funzione Volume (spostato in alto vicino a Schermo Intero) */}
             <div className="flex items-center gap-1.5 bg-slate-850 border border-slate-700 rounded-xl px-2.5 py-1 shadow-sm">

@@ -50,8 +50,7 @@ import {
   Info,
   Music,
   Pause,
-  Edit3,
-  Megaphone
+  Edit3
 } from 'lucide-react';
 
 interface TeacherMonitorProps {
@@ -399,6 +398,58 @@ export const TeacherMonitor: React.FC<TeacherMonitorProps> = ({
           </div>
           <p className="text-xs text-slate-400">
             Le caselle evidenziate in verde brillante mostrano la posizione esatta di tutte le parole nascoste nel crucipuzzle.
+          </p>
+        </div>
+      );
+    } else if (currentQ.type === 'cell_identify') {
+      const content = currentQ.content as CellIdentifyContent;
+      const cells = Array.isArray(content?.cells)
+        ? content.cells
+        : content?.cells && typeof content.cells === 'object'
+        ? Object.values(content.cells)
+        : [];
+      const correctCellIds = cells.filter((c: any) => c.isMatch).map((c: any) => c.id);
+      const solvedCount = answersList.filter((a) => a.isCorrect).length;
+
+      return (
+        <div className="p-6 bg-slate-950 border-2 border-indigo-500/50 rounded-3xl text-center space-y-5 shadow-2xl animate-scale-up">
+          <div className="flex flex-wrap items-center justify-between gap-2 pb-3 border-b border-indigo-500/20">
+            <span className="text-xs font-black text-indigo-300 uppercase tracking-widest flex items-center gap-2">
+              <span className="text-base">🎯</span> Soluzione Identifica Celle (Richiesta: "{content?.stimulus || ''}")
+            </span>
+            <span className="text-xs font-bold text-emerald-400 bg-emerald-500/15 px-3 py-1 rounded-full border border-emerald-500/30">
+              {solvedCount} su {playersList.length} studenti hanno risposto correttamente (+1 pt per cella corretta, -1 pt per errore)
+            </span>
+          </div>
+
+          <h3 className="text-xl md:text-2xl font-black text-white">"{currentQ.title}"</h3>
+
+          {/* Grid showing correct answers */}
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+            {cells.map((cell: any) => {
+              const isCorrectMatch = cell.isMatch;
+              return (
+                <div
+                  key={cell.id}
+                  className={`p-3 rounded-2xl border-2 font-bold text-sm flex flex-col items-center justify-center gap-1.5 shadow-md ${
+                    isCorrectMatch
+                      ? 'bg-emerald-500/25 border-emerald-400 text-emerald-200 ring-2 ring-emerald-400/50'
+                      : 'bg-slate-900 border-slate-700 text-slate-400 opacity-60'
+                  }`}
+                >
+                  {cell.image && (
+                    <img src={cell.image} alt={cell.text} className="w-12 h-12 object-cover rounded-xl" />
+                  )}
+                  <span>{cell.text}</span>
+                  <span className={`text-[10px] font-black uppercase px-2 py-0.5 rounded-full ${isCorrectMatch ? 'bg-emerald-500 text-slate-950' : 'bg-slate-800 text-slate-400'}`}>
+                    {isCorrectMatch ? '✓ Risposta Giusta (+1 pt)' : '× Non collegata (-1 pt)'}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+          <p className="text-xs text-slate-400">
+            Il docente e la classe possono verificare qui quali celle erano corrette in base alla richiesta iniziale.
           </p>
         </div>
       );
@@ -1162,14 +1213,6 @@ export const TeacherMonitor: React.FC<TeacherMonitorProps> = ({
                 <div>
                   <div className="flex items-center gap-3">
                     <h2 className="text-2xl font-black text-white">Repository Domande</h2>
-                    <button
-                      onClick={() => sound.speakWelcomeTeacher()}
-                      className="flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-indigo-500/15 hover:bg-indigo-500/30 border border-indigo-500/30 text-indigo-300 hover:text-white text-[11px] font-bold transition-all cursor-pointer shadow-sm active:scale-95"
-                      title="Ascolta l'annuncio vocale: Benvenuti a Flipquiz il gioco che vinci creando domande"
-                    >
-                      <Megaphone className="w-3.5 h-3.5 text-amber-400" />
-                      <span>Voce Benvenuto</span>
-                    </button>
                   </div>
                   <p className="text-xs text-slate-400 mt-0.5">
                     Domande create dagli studenti pronte per la sfida
@@ -1603,12 +1646,16 @@ export const TeacherMonitor: React.FC<TeacherMonitorProps> = ({
                         }`}
                       >
                         <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-2">
+                          <div className="flex items-center gap-2 flex-wrap">
                             <span className="text-base">{player.avatar}</span>
                             <span className="font-extrabold text-sm text-white">{player.name}</span>
                             {player.isSimulated && (
                               <span className="text-[10px] text-slate-400 font-mono">(Bot)</span>
                             )}
+                            {/* MINI SUMMARY OF POINTS EARNED */}
+                            <span className="px-2 py-0.5 rounded-xl bg-amber-500/20 text-amber-300 font-mono text-xs font-black border border-amber-500/40 shadow-sm" title="Riepilogo Punti: Valore Base + Bonus + Corrette/Errate">
+                              {sub ? `+${sub.pointsAwarded || 0} pt (Base ${currentQ.points}${sub.speedRank ? ` + Bonus ${sub.speedRank === 1 ? '20' : sub.speedRank === 2 ? '15' : '10'}` : ''})` : '0 pt'}
+                            </span>
                           </div>
 
                           <div className="flex items-center gap-1.5">
