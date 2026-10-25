@@ -20,6 +20,7 @@ import { QRCodeDisplay } from './QRCodeDisplay';
 import { sound } from '../utils/audio';
 import { generateWordSearchGrid } from '../utils/wordSearchGenerator';
 import { TeacherConfigurationModal } from './TeacherConfigurationModal';
+import { QuestionCreator } from './QuestionCreator';
 import confetti from 'canvas-confetti';
 import {
   Play,
@@ -48,7 +49,9 @@ import {
   UserX,
   Info,
   Music,
-  Pause
+  Pause,
+  Edit3,
+  Megaphone
 } from 'lucide-react';
 
 interface TeacherMonitorProps {
@@ -60,6 +63,7 @@ interface TeacherMonitorProps {
   onTerminateGame: () => void;
   onUpdateQuestionPointsAndTime: (qId: string | 'all', points: number, timeLimit: number) => void;
   onDeleteQuestion: (qId: string) => void;
+  onUpdateQuestion?: (question: Question) => void;
   onAddSimulatedStudents: (count?: number) => void;
   onKickStudent?: (playerId: string) => void;
   onToggleSound: () => void;
@@ -76,6 +80,7 @@ export const TeacherMonitor: React.FC<TeacherMonitorProps> = ({
   onTerminateGame,
   onUpdateQuestionPointsAndTime,
   onDeleteQuestion,
+  onUpdateQuestion,
   onAddSimulatedStudents,
   onKickStudent,
   onToggleSound,
@@ -89,6 +94,15 @@ export const TeacherMonitor: React.FC<TeacherMonitorProps> = ({
   const [configSavedToast, setConfigSavedToast] = useState(false);
   const [copiedLink, setCopiedLink] = useState(false);
   const [timeRemaining, setTimeRemaining] = useState<number>(25);
+  const [editingQuestion, setEditingQuestion] = useState<Question | null>(null);
+
+  // Vocal Welcome when teacher screen starts
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      sound.speakWelcomeTeacher();
+    }, 800);
+    return () => clearTimeout(timer);
+  }, []);
 
   // Background Music state
   const [selectedMusicTheme, setSelectedMusicTheme] = useState<string>(() => sound.getMusicTheme() || 'gameshow');
@@ -1107,7 +1121,11 @@ export const TeacherMonitor: React.FC<TeacherMonitorProps> = ({
                   Inquadra per Partecipare
                 </span>
 
-              <QRCodeDisplay value={`${appUrl}?pin=${roomState.roomCode}&role=student`} size={220} />
+              <QRCodeDisplay
+                value={`${appUrl}?pin=${roomState.roomCode}&role=student`}
+                size={220}
+                pin={roomState.roomCode}
+              />
 
               <div className="mt-5 w-full p-3.5 bg-slate-950 rounded-2xl border border-slate-800 flex items-center justify-between">
                 <span className="text-xs text-slate-400 font-bold">Link diretto studente:</span>
@@ -1142,8 +1160,18 @@ export const TeacherMonitor: React.FC<TeacherMonitorProps> = ({
             <div className="md:col-span-7 bg-slate-900 border border-slate-800 p-8 rounded-3xl shadow-2xl flex flex-col gap-6">
               <div className="flex items-center justify-between">
                 <div>
-                  <h2 className="text-2xl font-black text-white">Repository Domande</h2>
-                  <p className="text-xs text-slate-400">
+                  <div className="flex items-center gap-3">
+                    <h2 className="text-2xl font-black text-white">Repository Domande</h2>
+                    <button
+                      onClick={() => sound.speakWelcomeTeacher()}
+                      className="flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-indigo-500/15 hover:bg-indigo-500/30 border border-indigo-500/30 text-indigo-300 hover:text-white text-[11px] font-bold transition-all cursor-pointer shadow-sm active:scale-95"
+                      title="Ascolta l'annuncio vocale: Benvenuti a Flipquiz il gioco che vinci creando domande"
+                    >
+                      <Megaphone className="w-3.5 h-3.5 text-amber-400" />
+                      <span>Voce Benvenuto</span>
+                    </button>
+                  </div>
+                  <p className="text-xs text-slate-400 mt-0.5">
                     Domande create dagli studenti pronte per la sfida
                   </p>
                 </div>
@@ -1188,6 +1216,14 @@ export const TeacherMonitor: React.FC<TeacherMonitorProps> = ({
                     </div>
 
                     <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => setEditingQuestion(q)}
+                        className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-indigo-300 hover:text-white bg-indigo-500/20 hover:bg-indigo-500/35 border border-indigo-500/40 rounded-xl transition-all cursor-pointer shadow-sm active:scale-95"
+                        title="Modifica l'attività, il testo e verifica le risposte corrette"
+                      >
+                        <Edit3 className="w-3.5 h-3.5" />
+                        <span>Edit</span>
+                      </button>
                       <button
                         onClick={() => openQuestionConfig(q)}
                         className="p-2 text-slate-400 hover:text-white hover:bg-slate-800 rounded-xl transition-colors cursor-pointer"
@@ -1847,6 +1883,27 @@ export const TeacherMonitor: React.FC<TeacherMonitorProps> = ({
         onUpdateQuestionPointsAndTime={onUpdateQuestionPointsAndTime}
         initialSelectedQId={selectedConfigQId}
       />
+
+      {/* Edit Question Modal for Teacher */}
+      {editingQuestion && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-5 bg-black/85 backdrop-blur-md animate-fade-in overflow-y-auto">
+          <div className="w-full max-w-4xl my-auto">
+            <QuestionCreator
+              creatorName={editingQuestion.creatorName}
+              initialQuestion={editingQuestion}
+              isEditing={true}
+              onCancel={() => setEditingQuestion(null)}
+              onSubmitQuestion={(updatedQ) => {
+                if (onUpdateQuestion) {
+                  onUpdateQuestion(updatedQ);
+                }
+                setEditingQuestion(null);
+                sound.playCorrect();
+              }}
+            />
+          </div>
+        </div>
+      )}
 
     </div>
   );

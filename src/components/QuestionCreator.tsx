@@ -44,6 +44,8 @@ interface QuestionCreatorProps {
   creatorName: string;
   onSubmitQuestion: (question: Question) => void;
   onCancel?: () => void;
+  initialQuestion?: Question;
+  isEditing?: boolean;
 }
 
 const QUESTION_TYPES_INFO: {
@@ -163,12 +165,14 @@ const QUESTION_TYPES_INFO: {
 export const QuestionCreator: React.FC<QuestionCreatorProps> = ({
   creatorName,
   onSubmitQuestion,
-  onCancel
+  onCancel,
+  initialQuestion,
+  isEditing = false
 }) => {
-  const [selectedType, setSelectedType] = useState<QuestionType>('multiple_choice');
-  const [title, setTitle] = useState('');
-  const [timeLimit, setTimeLimit] = useState<number>(25);
-  const [mainImageUrl, setMainImageUrl] = useState<string>('');
+  const [selectedType, setSelectedType] = useState<QuestionType>(initialQuestion?.type || 'multiple_choice');
+  const [title, setTitle] = useState(initialQuestion?.title || '');
+  const [timeLimit, setTimeLimit] = useState<number>(initialQuestion?.timeLimit || 25);
+  const [mainImageUrl, setMainImageUrl] = useState<string>(initialQuestion?.imageUrl || '');
   const [isImagePickerOpen, setIsImagePickerOpen] = useState(false);
   const [activeImagePickerTarget, setActiveImagePickerTarget] = useState<string>('main');
 
@@ -176,18 +180,33 @@ export const QuestionCreator: React.FC<QuestionCreatorProps> = ({
   // Multiple Choice (with optional option images)
   const [mcOptions, setMcOptions] = useState<
     { id: string; text: string; isCorrect: boolean; imageUrl?: string }[]
-  >([
-    { id: 'opt-1', text: '', isCorrect: true },
-    { id: 'opt-2', text: '', isCorrect: false },
-    { id: 'opt-3', text: '', isCorrect: false },
-    { id: 'opt-4', text: '', isCorrect: false }
-  ]);
+  >(() => {
+    if (initialQuestion?.type === 'multiple_choice' && (initialQuestion.content as MultipleChoiceContent)?.options) {
+      return (initialQuestion.content as MultipleChoiceContent).options;
+    }
+    return [
+      { id: 'opt-1', text: '', isCorrect: true },
+      { id: 'opt-2', text: '', isCorrect: false },
+      { id: 'opt-3', text: '', isCorrect: false },
+      { id: 'opt-4', text: '', isCorrect: false }
+    ];
+  });
 
   // True / False
-  const [tfCorrect, setTfCorrect] = useState<boolean>(true);
+  const [tfCorrect, setTfCorrect] = useState<boolean>(() => {
+    if (initialQuestion?.type === 'true_false' && typeof (initialQuestion.content as TrueFalseContent)?.isTrueCorrect === 'boolean') {
+      return (initialQuestion.content as TrueFalseContent).isTrueCorrect;
+    }
+    return true;
+  });
 
   // Open Short
-  const [openAnswers, setOpenAnswers] = useState<string>('');
+  const [openAnswers, setOpenAnswers] = useState<string>(() => {
+    if (initialQuestion?.type === 'open_short' && (initialQuestion.content as OpenShortContent)?.acceptedAnswers) {
+      return (initialQuestion.content as OpenShortContent).acceptedAnswers.join(', ');
+    }
+    return '';
+  });
 
   // Fill Blanks - support multiple custom blanks with distractors
   const [fillSentence, setFillSentence] = useState('MARIO VA AL MARE IN VACANZA');
@@ -430,15 +449,15 @@ export const QuestionCreator: React.FC<QuestionCreatorProps> = ({
     }
 
     const newQuestion: Question = {
-      id: `q-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+      id: initialQuestion ? initialQuestion.id : `q-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
       type: selectedType,
       title: title.trim(),
-      creatorName: creatorName || 'Studente',
+      creatorName: initialQuestion ? initialQuestion.creatorName : (creatorName || 'Studente'),
       timeLimit,
-      points: 50,
+      points: initialQuestion ? initialQuestion.points : 50,
       imageUrl: mainImageUrl || undefined,
       content,
-      createdAt: Date.now(),
+      createdAt: initialQuestion ? initialQuestion.createdAt : Date.now(),
       approved: true
     };
 
@@ -451,13 +470,13 @@ export const QuestionCreator: React.FC<QuestionCreatorProps> = ({
       <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-6 border-b border-slate-800 gap-4">
         <div>
           <span className="text-xs font-black uppercase tracking-wider text-indigo-400">
-            Flipped Classroom • Crea la tua domanda
+            {isEditing ? 'Modalità Docente • Modifica Domanda & Risposte' : 'Flipped Classroom • Crea la tua domanda'}
           </span>
           <h2 className="text-2xl md:text-3xl font-black text-white mt-1">
-            Editor Domanda FlipQuiz
+            {isEditing ? 'Modifica Attività del Quiz' : 'Editor Domanda FlipQuiz'}
           </h2>
           <p className="text-xs text-slate-400">
-            Creatore: <strong className="text-indigo-300 font-bold">{creatorName}</strong> — La tua domanda verrà proiettata sulla LIM della classe!
+            Creatore: <strong className="text-indigo-300 font-bold">{initialQuestion?.creatorName || creatorName}</strong> — {isEditing ? 'Verifica le risposte corrette o modifica il testo della domanda' : 'La tua domanda verrà proiettata sulla LIM della classe!'}
           </p>
         </div>
 
@@ -1605,10 +1624,10 @@ export const QuestionCreator: React.FC<QuestionCreatorProps> = ({
 
           <button
             type="submit"
-            className="px-8 py-3.5 rounded-2xl bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-400 hover:to-teal-500 text-white font-black text-base shadow-xl flex items-center gap-2 transition-transform active:scale-98"
+            className="px-8 py-3.5 rounded-2xl bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-400 hover:to-teal-500 text-white font-black text-base shadow-xl flex items-center gap-2 transition-transform active:scale-98 cursor-pointer"
           >
             <Send className="w-5 h-5" />
-            Invia Domanda al Repository Docente
+            {isEditing ? 'Salva Modifiche Attività' : 'Invia Domanda al Repository Docente'}
           </button>
         </div>
       </form>

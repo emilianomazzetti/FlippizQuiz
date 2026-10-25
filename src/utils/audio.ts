@@ -323,6 +323,38 @@ class SoundController {
       }
     }, stepIntervalMs);
   }
+
+  public speakWelcomeTeacher() {
+    if (typeof window === 'undefined' || !('speechSynthesis' in window)) return;
+    try {
+      window.speechSynthesis.cancel();
+      const text = "Benvenuti a Flipquiz il gioco che vinci creando domande";
+      const utterance = new SpeechSynthesisUtterance(text);
+      utterance.lang = 'it-IT';
+      utterance.rate = 1.0;
+      utterance.pitch = 1.05;
+
+      const pickVoiceAndSpeak = () => {
+        const voices = window.speechSynthesis.getVoices();
+        const itVoice = voices.find((v) => v.lang.toLowerCase().startsWith('it'));
+        if (itVoice) {
+          utterance.voice = itVoice;
+        }
+        window.speechSynthesis.speak(utterance);
+      };
+
+      if (window.speechSynthesis.getVoices().length > 0) {
+        pickVoiceAndSpeak();
+      } else {
+        window.speechSynthesis.onvoiceschanged = () => {
+          pickVoiceAndSpeak();
+          window.speechSynthesis.onvoiceschanged = null;
+        };
+      }
+    } catch (e) {
+      console.warn('Voice welcome synthesis note:', e);
+    }
+  }
 }
 
 export const sound = new SoundController();

@@ -15,6 +15,7 @@ import { ArchitectureGuideModal } from './components/ArchitectureGuideModal';
 import { FirebaseDiagnosticModal } from './components/FirebaseDiagnosticModal';
 import { QuestionCreator } from './components/QuestionCreator';
 import { TeacherConfigurationModal } from './components/TeacherConfigurationModal';
+import { BadgesModal } from './components/BadgesModal';
 import { sound } from './utils/audio';
 import confetti from 'canvas-confetti';
 import { api } from './services/api';
@@ -68,6 +69,7 @@ export default function App() {
   const [isLeaderboardModalOpen, setIsLeaderboardModalOpen] = useState<boolean>(false);
   const [isTeacherCreatorOpen, setIsTeacherCreatorOpen] = useState<boolean>(false);
   const [persistentStudents, setPersistentStudents] = useState<Record<string, GlobalPlayerScore>>({});
+  const [selectedStudentForBadges, setSelectedStudentForBadges] = useState<GlobalPlayerScore | null>(null);
 
   // Fullscreen support for tablet devices and LIM
   const { isFullscreen: isAppFs, toggle: toggleAppFs } = useFullscreen();
@@ -716,12 +718,13 @@ export default function App() {
         isCorrect
       );
 
-      // Persist global score delta to persistent students node
-      if (scoreDelta !== 0) {
+      // Persist global score delta and correct answer count to persistent students node
+      if (scoreDelta !== 0 || isCorrect) {
         firebaseSync.updateStudentScore(
           playerName,
           existingPlayer.avatar || '🚀',
-          scoreDelta
+          scoreDelta,
+          isCorrect
         );
       }
 
@@ -1033,9 +1036,39 @@ export default function App() {
           return updated;
         });
         firebaseSync.setPhase(roomState.roomCode, 'podium');
+        recordPodiumStats(roomState.players);
       }
     }
     api.nextStep();
+  };
+
+  // Helper to record persistent podium placements for medals
+  const recordPodiumStats = (currentPlayers: Record<string, Player>) => {
+    const list = Object.values(currentPlayers || {}).filter((p) => !p.isSimulated);
+    if (list.length === 0) return;
+    const sorted = [...list].sort((a, b) => b.score - a.score);
+    const podiumData = sorted.map((p, idx) => ({
+      name: p.name,
+      avatar: p.avatar,
+      rank: idx + 1
+    }));
+    firebaseSync.recordPodiumResults(podiumData);
+  };
+
+  // Teacher updating question content / answers / stimulus
+  const handleUpdateQuestion = (updatedQuestion: Question) => {
+    setRoomState((prev) => {
+      const updatedQuestions = prev.questions.map((q) =>
+        q.id === updatedQuestion.id ? updatedQuestion : q
+      );
+      const updated: RoomState = {
+        ...prev,
+        questions: updatedQuestions
+      };
+      api.broadcastLocal(updated);
+      firebaseSync.pushRoomState(updated);
+      return updated;
+    });
   };
 
   // Teacher updating points and time limit for a question (or globally for all)
@@ -1091,6 +1124,7 @@ export default function App() {
     });
 
     firebaseSync.setPhase(roomState.roomCode, 'podium');
+    recordPodiumStats(roomState.players);
     sound.playFanfare();
     confetti({
       particleCount: 150,
@@ -1519,6 +1553,7 @@ export default function App() {
             onTerminateGame={handleTerminateGame}
             onUpdateQuestionPointsAndTime={handleUpdateQuestionPointsAndTime}
             onDeleteQuestion={handleDeleteQuestion}
+            onUpdateQuestion={handleUpdateQuestion}
             onAddSimulatedStudents={handleAddSimulatedStudents}
             onKickStudent={handleKickStudent}
             onToggleSound={handleToggleSound}
@@ -1540,6 +1575,7 @@ export default function App() {
             onSaveDrawing={handleSaveDrawing}
             onVoteDrawing={handleVoteDrawing}
             showQuestionToStudents={roomState.showQuestionToStudents}
+            persistentStudents={persistentStudents}
           />
         )}
       </main>
@@ -1699,6 +1735,21 @@ export default function App() {
                     {sortedGlobal.map((player, index) => {
                       const rank = index + 1;
                       const medal = rank === 1 ? '🥇' : rank === 2 ? '🥈' : rank === 3 ? '🥉' : `#${rank}`;
+                      const cleanK = getGlobalKey(player.name);
+                      const studentRecord: GlobalPlayerScore =
+                        (cleanK && persistentStudents[cleanK]) || {
+                          name: player.name,
+                          avatar: player.avatar,
+                          totalScore: player.totalScore,
+                          gamesPlayed: player.gamesPlayed,
+                          totalCorrectAnswers: 0,
+                          wins: 0,
+                          top3Count: 0,
+                          secondPlaceCount: 0,
+                          thirdPlaceCount: 0,
+                          lastActive: Date.now()
+                        };
+
                       const cardBorder =
                         rank === 1
                           ? 'border-amber-400/60 bg-gradient-to-r from-amber-500/15 via-slate-900 to-slate-900 shadow-amber-500/10'
@@ -1711,7 +1762,9 @@ export default function App() {
                       return (
                         <div
                           key={player.name}
-                          className={`p-4 rounded-2xl border flex items-center justify-between gap-4 transition-all shadow-md ${cardBorder}`}
+                          onClick={() => setSelectedStudentForBadges(studentRecord)}
+                          className={`p-4 rounded-2xl border flex items-center justify-between gap-4 transition-all shadow-md cursor-pointer hover:scale-[1.01] hover:ring-2 hover:ring-amber-400 active:scale-[0.99] group ${cardBorder}`}
+                          title="Tocca per aprire il Pannello dei Premi e il Medagliere dei Badge dello studente"
                         >
                           <div className="flex items-center gap-3.5">
                             <div
@@ -1731,15 +1784,22 @@ export default function App() {
                             <div>
                               <div className="flex items-center gap-2">
                                 <span className="text-xl">{player.avatar}</span>
-                                <span className="font-black text-white text-base">{player.name}</span>
+                                <span className="font-black text-white text-base group-hover:text-amber-300 transition-colors">
+                                  {player.name}
+                                </span>
                                 {player.isSimulated && (
                                   <span className="text-[10px] text-slate-400 font-mono px-1.5 py-0.5 rounded bg-slate-800 border border-slate-700">
                                     Bot
                                   </span>
                                 )}
                               </div>
-                              <div className="flex items-center gap-2 text-[11px] text-slate-400 mt-0.5">
+                              <div className="flex flex-wrap items-center gap-2 text-[11px] text-slate-400 mt-0.5">
                                 <span>{player.gamesPlayed} {player.gamesPlayed === 1 ? 'sessione' : 'sessioni'}</span>
+                                <span>•</span>
+                                <span className="text-emerald-300 font-bold flex items-center gap-1">
+                                  <CheckCircle2 className="w-3 h-3 text-emerald-400" />
+                                  {studentRecord.totalCorrectAnswers ?? 0} risposte corrette
+                                </span>
                                 <span>•</span>
                                 <span className="text-indigo-300 font-semibold">
                                   In questo quiz: +{player.sessionScore} pt
@@ -1748,12 +1808,19 @@ export default function App() {
                             </div>
                           </div>
 
-                          <div className="text-right">
-                            <div className="text-2xl font-black font-mono text-amber-300">
-                              {player.totalScore} <span className="text-xs text-slate-400 font-sans font-bold">pt totali</span>
+                          <div className="flex items-center gap-3">
+                            <div className="text-right">
+                              <div className="text-2xl font-black font-mono text-amber-300">
+                                {player.totalScore} <span className="text-xs text-slate-400 font-sans font-bold">pt totali</span>
+                              </div>
+                              <div className="text-[11px] text-slate-400 font-medium">
+                                {rank === 1 ? '🏆 Capoclassifica' : `${rank}° Posizione`}
+                              </div>
                             </div>
-                            <div className="text-[11px] text-slate-400 font-medium">
-                              {rank === 1 ? '🏆 Capoclassifica Generale' : `${rank}° Posizione`}
+
+                            <div className="hidden sm:flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-amber-500/20 text-amber-300 border border-amber-500/40 text-xs font-black group-hover:bg-amber-400 group-hover:text-slate-950 transition-colors">
+                              <Trophy className="w-3.5 h-3.5" />
+                              <span>Premi</span>
                             </div>
                           </div>
                         </div>
@@ -1774,25 +1841,12 @@ export default function App() {
                 <button
                   type="button"
                   onClick={() => {
-                    const allMap: Record<string, any> = {};
-                    Object.values(roomState.globalScores || {}).forEach((g) => {
-                      const key = g.name.trim().toLowerCase();
-                      allMap[key] = { name: g.name, totalScore: g.totalScore || 0, sessionScore: 0, gamesPlayed: g.gamesPlayed || 1 };
-                    });
-                    Object.values(roomState.players || {}).forEach((p) => {
-                      const key = p.name.trim().toLowerCase();
-                      if (allMap[key]) {
-                        allMap[key].sessionScore = p.score || 0;
-                      } else {
-                        allMap[key] = { name: p.name, totalScore: p.score || 0, sessionScore: p.score || 0, gamesPlayed: 1 };
-                      }
-                    });
-                    const sortedList = Object.values(allMap).sort((a, b) => b.totalScore - a.totalScore);
+                    const sortedList = Object.values(persistentStudents || {}).sort((a, b) => b.totalScore - a.totalScore);
                     if (sortedList.length === 0) return;
 
-                    let csv = "Posizione,Nome Studente,Punti Totali Cumulativi,Punti Sessione Attuale,Sessioni Giocate\n";
+                    let csv = "Posizione,Nome Studente,Punti Totali Cumulativi,Risposte Giuste Totali,Sessioni Giocate\n";
                     sortedList.forEach((row, idx) => {
-                      csv += `${idx + 1},"${row.name.replace(/"/g, '""')}",${row.totalScore},${row.sessionScore},${row.gamesPlayed}\n`;
+                      csv += `${idx + 1},"${row.name.replace(/"/g, '""')}",${row.totalScore},${row.totalCorrectAnswers || 0},${row.gamesPlayed || 1}\n`;
                     });
 
                     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
@@ -1844,6 +1898,15 @@ export default function App() {
             </div>
           </div>
         </div>
+      )}
+
+      {/* Student Personal Rewards & Badges Modal */}
+      {selectedStudentForBadges && (
+        <BadgesModal
+          isOpen={selectedStudentForBadges !== null}
+          onClose={() => setSelectedStudentForBadges(null)}
+          student={selectedStudentForBadges}
+        />
       )}
 
       {/* Teacher Question Creator Modal */}

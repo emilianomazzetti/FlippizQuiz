@@ -175,6 +175,7 @@ export function sanitizeRoomState(data: any, fallback?: RoomState): RoomState {
     kickedPlayerIds: Array.isArray(data.kickedPlayerIds) ? data.kickedPlayerIds : (fallback?.kickedPlayerIds || []),
     deletedQuestionIds: Array.from(deletedIds),
     teacherClosed: typeof data.teacherClosed === 'boolean' ? data.teacherClosed : !!fallback?.teacherClosed,
+    showQuestionToStudents: typeof data.showQuestionToStudents === 'boolean' ? data.showQuestionToStudents : !!fallback?.showQuestionToStudents,
     settings: {
       basePoints: data.settings?.basePoints ?? fallback?.settings?.basePoints ?? 50,
       fastFingerBonus1: data.settings?.fastFingerBonus1 ?? fallback?.settings?.fastFingerBonus1 ?? 20,
@@ -692,11 +693,12 @@ export const firebaseSync = {
     }
   },
 
-  // Update permanent student score
+  // Update permanent student score and correct answers
   async updateStudentScore(
     playerName: string,
     avatar: string,
-    scoreDelta: number
+    scoreDelta: number,
+    isCorrect?: boolean
   ): Promise<boolean> {
     const cleanKey = getGlobalKey(playerName);
     if (!cleanKey) return false;
@@ -708,12 +710,18 @@ export const firebaseSync = {
 
       const totalScore = Math.max(0, (existing?.totalScore || 0) + scoreDelta);
       const gamesPlayed = existing?.gamesPlayed || 1;
+      const totalCorrectAnswers = (existing?.totalCorrectAnswers || 0) + (isCorrect ? 1 : 0);
 
       const payload = {
         name: playerName.trim(),
         avatar: avatar || existing?.avatar || '🚀',
         totalScore,
         gamesPlayed,
+        totalCorrectAnswers,
+        wins: existing?.wins || 0,
+        top3Count: existing?.top3Count || 0,
+        secondPlaceCount: existing?.secondPlaceCount || 0,
+        thirdPlaceCount: existing?.thirdPlaceCount || 0,
         lastActive: Date.now()
       };
 
@@ -722,6 +730,70 @@ export const firebaseSync = {
       return true;
     } catch (e) {
       console.warn('updateStudentScore Firebase error:', e);
+      return false;
+    }
+  },
+
+  // Record podium rankings when a game finishes
+  async recordPodiumResults(
+    podium: { name: string; avatar: string; rank: number }[]
+  ): Promise<boolean> {
+    try {
+      for (const p of podium) {
+        if (!p || !p.name) continue;
+        const cleanKey = getGlobalKey(p.name);
+        if (!cleanKey) continue;
+        const studentRef = ref(rtdb, `students/${cleanKey}`);
+        const snap = await get(studentRef);
+        const existing = snap.exists() ? snap.val() : null;
+
+        const isFirst = p.rank === 1;
+        const isSecond = p.rank === 2;
+        const isThird = p.rank === 3;
+        const isTop3 = p.rank >= 1 && p.rank <= 3;
+
+        const wins = (existing?.wins || 0) + (isFirst ? 1 : 0);
+        const top3Count = (existing?.top3Count || 0) + (isTop3 ? 1 : 0);
+        const secondPlaceCount = (existing?.secondPlaceCount || 0) + (isSecond ? 1 : 0);
+        const thirdPlaceCount = (existing?.thirdPlaceCount || 0) + (isThird ? 1 : 0);
+
+        await update(studentRef, {
+          wins,
+          top3Count,
+          secondPlaceCount,
+          thirdPlaceCount,
+          lastActive: Date.now()
+        });
+      }
+      notifyConnectionChange(true);
+      return true;
+    } catch (e) {
+      console.warn('recordPodiumResults error:', e);
+      return false;
+    }
+  },
+
+  removeGlobalScore(playerName: string): Promise<boolean> {
+    return this.removeStudent(playerName);
+  },
+
+  updateGlobalScore(
+    playerName: string,
+    avatar: string,
+    scoreDelta: number,
+    isCorrect?: boolean
+  ): Promise<boolean> {
+    return this.updateStudentScore(playerName, avatar, scoreDelta, isCorrect);
+  },
+
+  async clearGlobalLeaderboard(): Promise<boolean> {
+    try {
+      const studentsRef = ref(rtdb, 'students');
+      await set(studentsRef, null);
+      notifyConnectionChange(true);
+      return true;
+    } catch (e) {
+      console.warn('clearGlobalLeaderboard error:', e);
       return false;
     }
   },

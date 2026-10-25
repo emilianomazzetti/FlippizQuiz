@@ -1,13 +1,17 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   RoomState,
   Player,
   Question,
   AnswerSubmission,
-  DrawingSubmission
+  DrawingSubmission,
+  GlobalPlayerScore
 } from '../types/quiz';
 import { QuestionRenderer } from './game/QuestionRenderer';
 import { QuestionCreator } from './QuestionCreator';
+import { BadgesModal } from './BadgesModal';
+import { evaluateAllBadges, getNewlyUnlockedBadges, BadgeDefinition } from '../utils/badges';
+import { getGlobalKey } from '../utils/leaderboard';
 import { sound } from '../utils/audio';
 import confetti from 'canvas-confetti';
 import {
@@ -25,7 +29,8 @@ import {
   AlertCircle,
   Maximize,
   Minimize,
-  Tablet
+  Tablet,
+  Medal
 } from 'lucide-react';
 import {
   useFullscreen,
@@ -45,6 +50,7 @@ interface StudentDeviceProps {
   onSaveDrawing: (dataUrl: string) => void;
   onVoteDrawing: (targetPlayerId: string) => void;
   showQuestionToStudents?: boolean;
+  persistentStudents?: Record<string, GlobalPlayerScore>;
 }
 
 const AVATARS = ['🚀', '🦊', '⚡', '🦁', '🐼', '🎨', '🌟', '🎯', '🦉', '🐬', '🏆', '🍕'];
@@ -59,7 +65,8 @@ export const StudentDevice: React.FC<StudentDeviceProps> = ({
   onSubmitAnswer,
   onSaveDrawing,
   onVoteDrawing,
-  showQuestionToStudents = false
+  showQuestionToStudents = false,
+  persistentStudents = {}
 }) => {
   // Join form state
   const [name, setName] = useState('');
@@ -67,6 +74,9 @@ export const StudentDevice: React.FC<StudentDeviceProps> = ({
   const [pin, setPin] = useState(initialPin || roomState.roomCode);
   const [activeTab, setActiveTab] = useState<'play' | 'create'>('create');
   const [hasCreatedQuestion, setHasCreatedQuestion] = useState(false);
+  const [isBadgesModalOpen, setIsBadgesModalOpen] = useState(false);
+  const [newlyAwardedBadge, setNewlyAwardedBadge] = useState<BadgeDefinition | null>(null);
+  const prevStatsRef = useRef<GlobalPlayerScore | null>(null);
 
   // Fullscreen state: ONLY toggled when user clicks the dedicated button!
   const { isFullscreen, isSupported, enter: enterFullscreen, exit: exitFullscreen, toggle: toggleFullscreen } = useFullscreen();
@@ -80,6 +90,51 @@ export const StudentDevice: React.FC<StudentDeviceProps> = ({
     myPlayer && roomState.players && roomState.players[myPlayer.id]
       ? roomState.players[myPlayer.id]
       : myPlayer;
+
+  const cleanKey = activePlayer ? getGlobalKey(activePlayer.name) : '';
+  const currentGlobalStats: GlobalPlayerScore =
+    (cleanKey && persistentStudents && persistentStudents[cleanKey]) || {
+      name: activePlayer?.name || '',
+      avatar: activePlayer?.avatar || '🚀',
+      totalScore: activePlayer?.score || 0,
+      gamesPlayed: 1,
+      totalCorrectAnswers: 0,
+      wins: 0,
+      top3Count: 0,
+      secondPlaceCount: 0,
+      thirdPlaceCount: 0,
+      lastActive: Date.now()
+    };
+
+  const evaluatedBadges = evaluateAllBadges(currentGlobalStats);
+  const unlockedBadges = evaluatedBadges.filter((b) => b.isUnlocked);
+
+  // Detect newly unlocked badge in real-time
+  useEffect(() => {
+    if (!activePlayer || !currentGlobalStats.name) return;
+
+    if (prevStatsRef.current) {
+      const newlyUnlocked = getNewlyUnlockedBadges(prevStatsRef.current, currentGlobalStats);
+      if (newlyUnlocked.length > 0) {
+        const latestBadge = newlyUnlocked[newlyUnlocked.length - 1];
+        setNewlyAwardedBadge(latestBadge);
+        sound.playFanfare();
+        confetti({
+          particleCount: 130,
+          spread: 100,
+          origin: { y: 0.5 }
+        });
+      }
+    }
+    prevStatsRef.current = { ...currentGlobalStats };
+  }, [
+    currentGlobalStats.totalScore,
+    currentGlobalStats.wins,
+    currentGlobalStats.top3Count,
+    currentGlobalStats.secondPlaceCount,
+    currentGlobalStats.thirdPlaceCount,
+    currentGlobalStats.totalCorrectAnswers
+  ]);
 
   const questionsList = roomState.questions || [];
   const currentQ = questionsList[roomState.currentQuestionIndex] || questionsList[0];
@@ -408,6 +463,22 @@ export const StudentDevice: React.FC<StudentDeviceProps> = ({
         </div>
 
         <div className="flex items-center gap-2 sm:gap-3">
+          {/* Badge Button */}
+          <button
+            type="button"
+            onClick={() => setIsBadgesModalOpen(true)}
+            className="px-2.5 py-1.5 bg-gradient-to-r from-amber-500/20 to-yellow-500/20 hover:from-amber-500/35 hover:to-yellow-500/35 border border-amber-500/40 text-amber-300 font-black text-xs rounded-xl shadow-sm flex items-center gap-1.5 transition-all cursor-pointer active:scale-95"
+            title="Visualizza i tuoi badge e premi personali"
+          >
+            <Award className="w-3.5 h-3.5 text-amber-400" />
+            <span>Badge</span>
+            {unlockedBadges.length > 0 && (
+              <span className="px-1.5 py-0.2 bg-amber-400 text-slate-950 rounded-full text-[10px] font-black">
+                {unlockedBadges.length}
+              </span>
+            )}
+          </button>
+
           {activePlayer.streak > 1 && (
             <div className="flex items-center gap-1 px-2.5 py-1 bg-amber-500/20 border border-amber-500/40 rounded-xl text-xs font-black text-amber-300">
               <Flame className="w-3.5 h-3.5 fill-amber-400" />
@@ -421,11 +492,45 @@ export const StudentDevice: React.FC<StudentDeviceProps> = ({
         </div>
       </div>
 
-      {/* Question Display Banner */}
-      {showQuestionToStudents && currentQ && (
-        <div className="p-4 bg-indigo-900/40 border border-indigo-500/50 rounded-2xl animate-fade-in">
-          <h4 className="text-[10px] font-black text-indigo-300 uppercase tracking-widest mb-1">Domanda Corrente:</h4>
-          <p className="text-sm font-bold text-white">{currentQ.title}</p>
+      {/* Scattered Medals on Left Side */}
+      {unlockedBadges.length > 0 && (
+        <aside
+          className="fixed left-2 top-28 z-30 hidden md:flex flex-col gap-2 p-1.5 bg-slate-950/80 backdrop-blur-md border border-slate-800 rounded-2xl shadow-2xl max-h-[70vh] overflow-y-auto"
+          aria-label="Medaglie sbloccate"
+        >
+          <div className="text-[9px] font-black uppercase text-amber-400 tracking-wider text-center py-1 border-b border-slate-800">
+            Medaglie
+          </div>
+          {unlockedBadges.map((badge) => (
+            <button
+              key={badge.id}
+              onClick={() => setIsBadgesModalOpen(true)}
+              className="w-10 h-10 rounded-xl bg-gradient-to-tr from-amber-500/30 to-yellow-500/30 hover:from-amber-500/50 hover:to-yellow-500/50 border border-amber-400/50 text-xl flex items-center justify-center transition-transform hover:scale-115 active:scale-95 cursor-pointer shadow-md"
+              title={`${badge.title}: ${badge.description}`}
+            >
+              {badge.icon}
+            </button>
+          ))}
+        </aside>
+      )}
+
+      {/* Mini medals strip for mobile devices */}
+      {unlockedBadges.length > 0 && (
+        <div className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-950/70 rounded-xl border border-slate-800 overflow-x-auto shadow-sm">
+          <span className="text-[10px] font-black text-amber-400 uppercase tracking-wider shrink-0 flex items-center gap-1">
+            <Medal className="w-3 h-3" /> Medaglie ({unlockedBadges.length}):
+          </span>
+          {unlockedBadges.map((badge) => (
+            <button
+              key={badge.id}
+              onClick={() => setIsBadgesModalOpen(true)}
+              className="px-2 py-0.5 rounded-lg bg-amber-500/15 border border-amber-500/30 text-xs font-bold text-amber-200 flex items-center gap-1 shrink-0 hover:bg-amber-500/30 cursor-pointer"
+              title={badge.title}
+            >
+              <span>{badge.icon}</span>
+              <span className="text-[10px]">{badge.title}</span>
+            </button>
+          ))}
         </div>
       )}
 
@@ -574,8 +679,31 @@ export const StudentDevice: React.FC<StudentDeviceProps> = ({
               currentQ.type === 'mole_whack' ||
               currentQ.type === 'word_search';
 
+            const shouldShowQuestion = Boolean(roomState.showQuestionToStudents || showQuestionToStudents);
+
             return (
               <>
+                {shouldShowQuestion && (
+                  <div className="p-4 sm:p-5 bg-gradient-to-r from-indigo-950 via-slate-900 to-indigo-950 border-2 border-indigo-500/70 rounded-2xl shadow-xl animate-fade-in space-y-2">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="px-2.5 py-0.5 rounded-full bg-indigo-500 text-white text-[10px] font-black uppercase tracking-wider shadow-sm">
+                        TESTO DELLA DOMANDA
+                      </span>
+                      <span className="text-xs text-indigo-300 font-bold capitalize">
+                        {currentQ.type.replace('_', ' ')}
+                      </span>
+                    </div>
+                    <h3 className="text-lg sm:text-xl font-black text-white leading-snug">
+                      {currentQ.title}
+                    </h3>
+                    {currentQ.imageUrl && (
+                      <div className="max-h-52 rounded-xl overflow-hidden border border-slate-700 bg-slate-950 flex items-center justify-center mt-2">
+                        <img src={currentQ.imageUrl} alt="Immagine della domanda" className="max-h-52 w-auto object-contain" />
+                      </div>
+                    )}
+                  </div>
+                )}
+
                 <QuestionRenderer
                   question={currentQ}
                   onAnswer={handleAnswer}
@@ -721,6 +849,54 @@ export const StudentDevice: React.FC<StudentDeviceProps> = ({
           <p className="text-xs text-slate-500">
             Guarda la LIM per i dettagli del turno e i vincitori sul podio!
           </p>
+        </div>
+      )}
+
+      {/* Personal Badges Modal */}
+      {isBadgesModalOpen && (
+        <BadgesModal
+          isOpen={isBadgesModalOpen}
+          onClose={() => setIsBadgesModalOpen(false)}
+          student={currentGlobalStats}
+        />
+      )}
+
+      {/* Joyful Badge Award Celebration Modal */}
+      {newlyAwardedBadge && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-md animate-fade-in">
+          <div className="bg-gradient-to-b from-amber-950/90 via-slate-900 to-slate-950 border-2 border-amber-400 rounded-3xl p-6 sm:p-8 max-w-sm w-full text-center shadow-2xl space-y-4 animate-scale-up">
+            <div className="w-20 h-20 mx-auto rounded-3xl bg-gradient-to-tr from-amber-400 to-yellow-500 flex items-center justify-center text-5xl shadow-xl shadow-amber-500/30 animate-bounce">
+              {newlyAwardedBadge.icon}
+            </div>
+            <div className="space-y-1">
+              <span className="px-3 py-1 rounded-full bg-amber-400/20 text-amber-300 text-xs font-black uppercase tracking-wider border border-amber-400/30 inline-block">
+                🎉 NUOVO BADGE SBLOCCATO!
+              </span>
+              <h3 className="text-2xl font-black text-white pt-1">
+                {newlyAwardedBadge.title}
+              </h3>
+              <p className="text-xs text-slate-300">
+                {newlyAwardedBadge.description}
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => {
+                setNewlyAwardedBadge(null);
+                setIsBadgesModalOpen(true);
+              }}
+              className="w-full py-3 bg-gradient-to-r from-amber-400 to-yellow-500 hover:from-amber-300 hover:to-yellow-400 text-slate-950 font-black text-sm rounded-2xl shadow-lg transition-transform active:scale-95 cursor-pointer"
+            >
+              Evviva! Vedi Medagliere 🏅
+            </button>
+            <button
+              type="button"
+              onClick={() => setNewlyAwardedBadge(null)}
+              className="text-xs text-slate-400 hover:text-white cursor-pointer"
+            >
+              Chiudi
+            </button>
+          </div>
         </div>
       )}
     </div>

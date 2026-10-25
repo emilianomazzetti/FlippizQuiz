@@ -206,6 +206,11 @@ export interface GlobalPlayerScore {
   avatar: string;
   totalScore: number; // Cumulative total points collected across all FlipQuizLive games
   gamesPlayed: number; // Number of FlipQuizLive sessions played
+  totalCorrectAnswers?: number; // Total correct answers submitted across all FlipQuizLive games
+  wins?: number; // Number of 1st place finishes
+  top3Count?: number; // Number of times on podium (1st, 2nd, 3rd)
+  secondPlaceCount?: number; // Number of 2nd place finishes
+  thirdPlaceCount?: number; // Number of 3rd place finishes
   lastActive: number;
 }
 

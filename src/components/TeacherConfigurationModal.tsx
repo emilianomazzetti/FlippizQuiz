@@ -1,8 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { Settings, Check, Music, Pause, Play, Volume2, Users, Trash2 } from 'lucide-react';
+import { Settings, Check, Music, Pause, Play, Volume2 } from 'lucide-react';
 import { RoomState } from '../types/quiz';
 import { sound } from '../utils/audio';
-import { firebaseSync } from '../services/firebaseSync';
 
 interface TeacherConfigurationModalProps {
   isOpen: boolean;
@@ -19,7 +18,6 @@ export const TeacherConfigurationModal: React.FC<TeacherConfigurationModalProps>
   onUpdateQuestionPointsAndTime,
   initialSelectedQId = 'all'
 }) => {
-  const [activeTab, setActiveTab] = useState<'settings' | 'students'>('settings');
   const [selectedConfigQId, setSelectedConfigQId] = useState<string>(initialSelectedQId);
   const [editPoints, setEditPoints] = useState<number>(50);
   const [editTime, setEditTime] = useState<number>(25);
@@ -34,7 +32,6 @@ export const TeacherConfigurationModal: React.FC<TeacherConfigurationModalProps>
   // Initialize or reset fields when opened or question changes
   useEffect(() => {
     if (isOpen) {
-      setActiveTab('settings');
       const targetId = initialSelectedQId || 'all';
       setSelectedConfigQId(targetId);
       if (targetId === 'all') {
@@ -85,12 +82,6 @@ export const TeacherConfigurationModal: React.FC<TeacherConfigurationModalProps>
     }, 1200);
   };
 
-  const handleRemoveStudent = (name: string) => {
-    if (window.confirm(`Sei sicuro di voler rimuovere lo studente ${name} dalla classifica generale?`)) {
-        firebaseSync.removeGlobalScore(name);
-    }
-  };
-
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/85 backdrop-blur-sm animate-fade-in">
       <div className="bg-slate-900 border border-slate-700 w-full max-w-lg rounded-3xl p-5 sm:p-6 shadow-2xl flex flex-col max-h-[88vh] overflow-hidden">
@@ -102,7 +93,7 @@ export const TeacherConfigurationModal: React.FC<TeacherConfigurationModalProps>
             </div>
             <div>
               <h3 className="font-bold text-lg text-white">Configurazione Docente</h3>
-              <p className="text-xs text-slate-400">Gestione quiz e resoconto studenti</p>
+              <p className="text-xs text-slate-400">Punti, tempi delle domande e colonna sonora</p>
             </div>
           </div>
           <button
@@ -114,26 +105,8 @@ export const TeacherConfigurationModal: React.FC<TeacherConfigurationModalProps>
           </button>
         </div>
 
-        {/* Tabs */}
-        <div className="flex gap-2 mt-4 border-b border-slate-800">
-            <button 
-                onClick={() => setActiveTab('settings')}
-                className={`px-4 py-2 text-xs font-bold ${activeTab === 'settings' ? 'text-white border-b-2 border-indigo-500' : 'text-slate-500'}`}
-            >
-                Impostazioni
-            </button>
-            <button 
-                onClick={() => setActiveTab('students')}
-                className={`px-4 py-2 text-xs font-bold ${activeTab === 'students' ? 'text-white border-b-2 border-indigo-500' : 'text-slate-500'}`}
-            >
-                Elenco Studenti
-            </button>
-        </div>
-
         {/* Scrollable Content */}
         <div className="space-y-4 overflow-y-auto pr-2 my-3 flex-1 scrollbar-thin scrollbar-thumb-slate-700">
-          {activeTab === 'settings' ? (
-            <>
               {/* Question Target Selector */}
               <div>
                 <label className="text-xs font-bold text-slate-300 block mb-1">
@@ -348,32 +321,6 @@ export const TeacherConfigurationModal: React.FC<TeacherConfigurationModalProps>
                   Modifiche salvate con successo!
                 </div>
               )}
-            </>
-          ) : (
-            <div className="space-y-3">
-              {Object.values(roomState.globalScores || {}).map((s) => (
-                <div key={s.name} className="flex items-center justify-between p-3 bg-slate-800 rounded-xl border border-slate-700">
-                  <div className="flex items-center gap-3">
-                    <span className="text-xl">{s.avatar}</span>
-                    <div>
-                      <div className="font-bold text-sm">{s.name}</div>
-                      <div className="text-xs text-slate-400">{s.totalScore} pt totali • {s.gamesPlayed} sessioni</div>
-                    </div>
-                  </div>
-                  <button
-                    onClick={() => handleRemoveStudent(s.name)}
-                    className="p-2 text-rose-400 hover:text-rose-300 hover:bg-rose-500/20 rounded-lg"
-                    title="Rimuovi studente"
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </button>
-                </div>
-              ))}
-              {Object.keys(roomState.globalScores || {}).length === 0 && (
-                <p className="text-sm text-center text-slate-500 py-10">Nessuno studente in elenco.</p>
-              )}
-            </div>
-          )}
         </div>
 
         {/* Pinned Footer with Save Button */}
