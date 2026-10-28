@@ -1,0 +1,20 @@
+{
+  "rules": {
+    "rooms": {
+      "$roomCode": {
+        ".read": "auth != null",
+        ".write": "auth != null"
+      }
+    },
+    "students": {
+      ".read": "auth != null",
+      "$studentKey": {
+        ".write": "auth != null"
+      }
+    },
+    "diagnostic_ping": {
+      ".read": "auth != null",
+      ".write": "auth != null"
+    }
+  }
+}
